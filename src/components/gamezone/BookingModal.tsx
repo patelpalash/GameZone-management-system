@@ -67,22 +67,27 @@ export default function BookingModal({ station, isOpen, onClose, onSubmitPayment
 
   // Compute conflict logic in real-time
   const conflictError = useMemo(() => {
-    if (!isPrebook || !prebookDate || !prebookTime) return null;
+    if (isPrebook && (!prebookDate || !prebookTime)) return null;
 
-    const dateParts = prebookDate.split("-");
-    const timeParts = prebookTime.split(":");
-    if (dateParts.length < 3 || timeParts.length < 2) return null;
+    let start: Date;
+    if (isPrebook) {
+      const dateParts = prebookDate.split("-");
+      const timeParts = prebookTime.split(":");
+      if (dateParts.length < 3 || timeParts.length < 2) return null;
 
-    const start = new Date(
-      Number(dateParts[0]),
-      Number(dateParts[1]) - 1,
-      Number(dateParts[2]),
-      Number(timeParts[0]),
-      Number(timeParts[1])
-    );
+      start = new Date(
+        Number(dateParts[0]),
+        Number(dateParts[1]) - 1,
+        Number(dateParts[2]),
+        Number(timeParts[0]),
+        Number(timeParts[1])
+      );
+    } else {
+      start = new Date();
+    }
     const end = new Date(start.getTime() + selectedDuration * 60000);
 
-    if (start.getTime() < Date.now()) {
+    if (isPrebook && start.getTime() < Date.now()) {
       return "START_TIME_MUST_BE_IN_FUTURE";
     }
 
