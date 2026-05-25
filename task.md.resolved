@@ -1,0 +1,31 @@
+# Gamezone Command Center Tasks
+
+## Phase 1: File Structure & Setup
+- `[/]` Initialize Next.js 14 project
+- `[ ]` Install dependencies (firebase, lucide-react, framer-motion, qrcode.react)
+- `[ ]` Initialize Shadcn UI and add core components
+- `[ ]` Configure Firebase (`/src/lib/firebase.ts`)
+- `[ ]` Setup Global CSS for Cyber-Grid theme
+
+## Phase 2: The Component Blueprint
+- `[ ]` Create `StationCard.tsx`
+- `[ ]` Create `LiveTimer.tsx`
+- `[ ]` Create `BookingModal.tsx` (UPI QR Code generation)
+
+## Phase 3: The Admin Logic (The Brain)
+- `[ ]` Build Admin Dashboard Layout (`/app/admin/page.tsx`)
+- `[ ]` Build Verification Queue Component
+- `[ ]` Build Station Control Component
+
+## Phase 4: Real-Time Firebase Sync
+- `[ ]` Implement `useStations` hook
+- `[ ]` Implement `useBookings` hook
+- `[ ]` Hydrate Dashboard with Real-Time Data
+
+## Phase 5: The WhatsApp Notification Hook
+- `[ ]` Setup Firebase Cloud Functions environment
+- `[ ]` Write CRON job to check expiring bookings
+
+## Phase 6: Final Polish
+- `[ ]` Audit Mobile Responsiveness
+- `[ ]` Build Leaderboard Component

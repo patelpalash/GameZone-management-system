@@ -2,26 +2,141 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    /* Cyberpunk Palette */
+    --background: 0 0% 4%; /* Near black */
+    --foreground: 0 0% 95%;
+    
+    /* Neon Yellow #FCEE0A -> HSL */
+    --primary: 54 97% 51%; 
+    --primary-foreground: 0 0% 0%;
+    
+    /* Neon Cyan #00F0FF -> HSL */
+    --accent: 184 100% 50%;
+    --accent-foreground: 0 0% 0%;
+
+    /* Neon Pink #FF003C -> HSL */
+    --destructive: 346 100% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --card: 0 0% 7%;
+    --card-foreground: 0 0% 90%;
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 90%;
+    
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 90%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 60%;
+    
+    --border: 184 100% 50%; /* Cyan borders */
+    --input: 184 100% 50%;
+    --ring: 54 97% 51%; /* Yellow ring */
+    --radius: 0; /* Cyberpunk is sharp, no rounded corners */
   }
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    background-image: 
+      linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
+    background-size: 30px 30px;
+  }
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+/* Cyberpunk Angled Cuts */
+.cyber-cut {
+  clip-path: polygon(15px 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%, 0 15px);
+}
+
+.cyber-cut-reverse {
+  clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px));
+}
+
+/* CRT Scanlines Overlay */
+.scanlines {
+  position: relative;
+}
+.scanlines::before {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(18, 16, 16, 0) 50%,
+    rgba(0, 0, 0, 0.25) 50%
+  );
+  background-size: 100% 4px;
+  z-index: 50;
+  pointer-events: none;
+}
+
+/* Glitch Animations */
+@keyframes glitch-anim {
+  0% { clip-path: inset(10% 0 80% 0); transform: translate(-2px, 2px); }
+  20% { clip-path: inset(80% 0 5% 0); transform: translate(2px, -2px); }
+  40% { clip-path: inset(30% 0 40% 0); transform: translate(-2px, 0); }
+  60% { clip-path: inset(50% 0 10% 0); transform: translate(2px, 2px); }
+  80% { clip-path: inset(5% 0 70% 0); transform: translate(-2px, -2px); }
+  100% { clip-path: inset(40% 0 30% 0); transform: translate(0); }
+}
+
+.hover-glitch:hover {
+  animation: glitch-anim 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both infinite;
+}
+
+/* Neon Glow Utilities */
+.glow-yellow {
+  box-shadow: 0 0 15px 0px rgba(252, 238, 10, 0.4);
+}
+.glow-yellow:hover {
+  box-shadow: 0 0 25px 5px rgba(252, 238, 10, 0.6);
+}
+.glow-cyan {
+  box-shadow: 0 0 20px 2px rgba(0, 240, 255, 0.5);
+  border-color: rgba(0, 240, 255, 1);
+}
+.glow-cyan:hover {
+  box-shadow: 0 0 30px 8px rgba(0, 240, 255, 0.8);
+}
+.glow-pink {
+  box-shadow: 0 0 20px 2px rgba(255, 0, 60, 0.5);
+  border-color: rgba(255, 0, 60, 1);
+}
+.glow-pink:hover {
+  box-shadow: 0 0 30px 8px rgba(255, 0, 60, 0.8);
+}
+
+/* Vibrant Text Neon Effects */
+.text-neon-cyan {
+  text-shadow: 0 0 8px rgba(0,240,255,0.8), 0 0 20px rgba(0,240,255,0.5);
+}
+.text-neon-yellow {
+  text-shadow: 0 0 8px rgba(252,238,10,0.8), 0 0 20px rgba(252,238,10,0.5);
+}
+.text-neon-pink {
+  text-shadow: 0 0 8px rgba(255,0,60,0.8), 0 0 20px rgba(255,0,60,0.5);
+}
+
+/* Cyberpunk Heavy Gradient Backgrounds */
+.bg-cyber-gradient {
+  background: linear-gradient(135deg, rgba(0,240,255,0.1) 0%, rgba(255,0,60,0.1) 100%);
+  position: relative;
+}
+.bg-cyber-gradient::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0 50px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
 }

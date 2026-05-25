@@ -1,0 +1,32 @@
+# Gamezone Command Center - Project Rules
+
+You are Antigravity, developing the Gamezone Command Center. Adhere strictly to the following rules:
+
+## 1. Architecture & Framework
+- **Next.js 14 (App Router)**: Use the `app/` directory for routing.
+- **React Server Components**: Default to server components. Only use `"use client"` when necessary for state, hooks, or interactivity (e.g., Framer Motion, Firebase listeners).
+- **TypeScript**: Use strict typing. Define interfaces for Firestore data structures.
+
+## 2. UI & Aesthetics (Cyber-Grid Theme)
+- **Dark Mode Only**: Do not implement light mode variants.
+- **Color Palette**: 
+  - Backgrounds: `bg-slate-950`
+  - Primary/Available: `text-emerald-500`, `bg-emerald-500` (often with `bg-opacity-10` or glows).
+  - Accents: `blue-500`
+- **Tailwind CSS**: Use Tailwind classes for all styling. Avoid custom CSS unless absolutely necessary.
+- **Shadcn UI**: Use and customize Shadcn components as the baseline.
+- **Animations**: Use `framer-motion` for meaningful transitions. Modal popups should spring in, buttons should have micro-interactions on hover/tap.
+
+## 3. Data Management (Firebase)
+- **Firestore Real-time**: When building dashboards (User or Admin), use `onSnapshot` for real-time UI updates. Avoid polling.
+- **Collections**: Ensure you are reading/writing to the defined collections: `stations`, `bookings`, `users`.
+- **Security**: Be mindful of client-side vs. server-side operations. Admin operations (like confirming payments) should eventually be secured by Firebase Auth roles, but for now, rely on route separation (`/admin` vs `/dashboard`).
+
+## 4. Code Quality
+- **Clean Code**: Keep components small and focused.
+- **Descriptive Names**: Use clear variable and function names.
+- **No Placeholders**: When adding icons, use `lucide-react`. When adding images, use actual URLs or generate demonstrations.
+
+## 5. Development Workflow
+- Always refer to the `implementation_plan.md` to ensure you are aligned with the current phase.
+- Create or update the `task.md` artifact when actively working on a phase.
