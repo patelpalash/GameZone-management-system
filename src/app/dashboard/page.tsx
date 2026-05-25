@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useStations } from "@/hooks/useStations";
 import { useBookings } from "@/hooks/useBookings";
@@ -8,15 +8,19 @@ import StationCard from "@/components/gamezone/StationCard";
 import BookingModal from "@/components/gamezone/BookingModal";
 import Leaderboard from "@/components/gamezone/Leaderboard";
 import { Station, Booking } from "@/types";
-import { collection, doc, writeBatch, Timestamp, query, where, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Shield, Loader2, ArrowLeft, ShieldAlert, LogOut, User } from "lucide-react";
 import NextLink from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
-export default function UserDashboard() {
+function DashboardContent() {
   const { user, loading: authLoading, logout } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const paymentStatus = searchParams.get("payment");
+  const orderId = searchParams.get("orderId");
+  const paymentReason = searchParams.get("reason");
 
   const userId = user?.uid || "";
   const { stations, loading: stationsLoading } = useStations();
@@ -50,50 +54,6 @@ export default function UserDashboard() {
   const handleBookNow = (station: Station) => {
     setSelectedStation(station);
     setIsModalOpen(true);
-  };
-
-  const handleSubmitPayment = async (
-    stationId: string, 
-    durationMinutes: number, 
-    totalCost: number, 
-    transactionId: string,
-    isPrebook: boolean,
-    scheduledStartTime: Date | null,
-    scheduledEndTime: Date | null
-  ) => {
-    if (!user) return;
-    try {
-      const batch = writeBatch(db);
-      const newBookingRef = doc(collection(db, "bookings"));
-      const stationRef = doc(db, "stations", stationId);
-
-      batch.set(newBookingRef, {
-        stationId,
-        userId: user.uid,
-        userName: user.displayName || "Anonymous",
-        durationMinutes,
-        totalCost,
-        status: "pending",
-        transactionId,
-        startTime: null,
-        endTime: null,
-        isPrebook,
-        scheduledStartTime: scheduledStartTime ? Timestamp.fromDate(scheduledStartTime) : null,
-        scheduledEndTime: scheduledEndTime ? Timestamp.fromDate(scheduledEndTime) : null,
-      });
-
-      if (!isPrebook) {
-        batch.update(stationRef, {
-          status: "pending",
-          currentSessionId: newBookingRef.id,
-        });
-      }
-
-      await batch.commit();
-    } catch (error) {
-      console.error("Error submitting payment:", error);
-      throw error;
-    }
   };
 
   const getEndTimeForStation = (stationId: string) => {
@@ -163,6 +123,38 @@ export default function UserDashboard() {
         {/* Station Grid */}
         <div className="flex-1 space-y-12">
           
+          {/* Payment Success Alert */}
+          {paymentStatus === "success" && (
+            <div className="p-4 bg-green-950/40 border-2 border-green-500 text-green-400 font-mono text-sm cyber-cut shadow-[0_0_15px_rgba(34,197,94,0.15)] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <p className="font-bold uppercase tracking-widest text-white">&gt; SECURE_TRANSACTION_APPROVED</p>
+                <p className="text-xs text-green-500/80 mt-1">Order ID: {orderId} &bull; Station has been allocated and auto-activated successfully.</p>
+              </div>
+              <button 
+                onClick={() => router.replace("/dashboard")} 
+                className="px-4 py-1.5 bg-green-500 text-black text-xs font-black uppercase tracking-widest hover:bg-green-400 transition-colors self-start sm:self-center cyber-cut-reverse"
+              >
+                DISMISS
+              </button>
+            </div>
+          )}
+
+          {/* Payment Failure Alert */}
+          {paymentStatus === "failed" && (
+            <div className="p-4 bg-red-950/40 border-2 border-red-500 text-red-400 font-mono text-sm cyber-cut shadow-[0_0_15px_rgba(239,68,68,0.15)] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <p className="font-bold uppercase tracking-widest text-white">&gt; TRANSACTION_TERMINATED</p>
+                <p className="text-xs text-red-400/80 mt-1">Reason: {paymentReason || "Payment verification failed or was cancelled."}</p>
+              </div>
+              <button 
+                onClick={() => router.replace("/dashboard")} 
+                className="px-4 py-1.5 bg-red-500 text-black text-xs font-black uppercase tracking-widest hover:bg-red-400 transition-colors self-start sm:self-center cyber-cut-reverse"
+              >
+                DISMISS
+              </button>
+            </div>
+          )}
+
           {/* PC Section */}
           <section>
             <div className="flex items-center gap-3 mb-6 pb-2 border-b border-cyan-500/30">
@@ -221,8 +213,22 @@ export default function UserDashboard() {
         station={selectedStation} 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
-        onSubmitPayment={handleSubmitPayment}
       />
     </div>
+  );
+}
+
+export default function UserDashboard() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-black">
+        <div className="flex flex-col items-center gap-4 text-cyan-500">
+          <Loader2 className="w-12 h-12 animate-spin" />
+          <h1 className="text-2xl font-black tracking-widest uppercase animate-pulse">ESTABLISHING_LINK...</h1>
+        </div>
+      </div>
+    }>
+      <DashboardContent />
+    </Suspense>
   );
 }

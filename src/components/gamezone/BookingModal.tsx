@@ -2,17 +2,28 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { QRCodeSVG } from "qrcode.react";
 import { Station, Booking } from "@/types";
 import { Loader2, TerminalSquare, Calendar, Clock, AlertTriangle } from "lucide-react";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { useAuth } from "@/contexts/AuthContext";
+
+declare global {
+  interface Window {
+    Paytm?: {
+      CheckoutJS: {
+        init: (config: unknown) => Promise<void>;
+        invoke: () => void;
+      };
+    };
+  }
+}
 
 interface BookingModalProps {
   station: Station | null;
   isOpen: boolean;
   onClose: () => void;
-  onSubmitPayment: (
+  onSubmitPayment?: (
     stationId: string, 
     durationMinutes: number, 
     totalCost: number, 
@@ -31,9 +42,9 @@ const DURATIONS = [
   { label: "FULL_DAY", minutes: 720 },
 ];
 
-export default function BookingModal({ station, isOpen, onClose, onSubmitPayment }: BookingModalProps) {
+export default function BookingModal({ station, isOpen, onClose }: BookingModalProps) {
+  const { user } = useAuth();
   const [selectedDuration, setSelectedDuration] = useState<number>(60);
-  const [transactionId, setTransactionId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Prebooking states
@@ -41,6 +52,30 @@ export default function BookingModal({ station, isOpen, onClose, onSubmitPayment
   const [prebookDate, setPrebookDate] = useState("");
   const [prebookTime, setPrebookTime] = useState("");
   const [stationBookings, setStationBookings] = useState<Booking[]>([]);
+
+  // Dynamically load Paytm CheckoutJS script
+  useEffect(() => {
+    if (!isOpen || !station) return;
+
+    const mid = process.env.NEXT_PUBLIC_PAYTM_MID || "YOUR_TEST_MID";
+    const env = process.env.NEXT_PUBLIC_PAYTM_ENV || "stage";
+    const domain = env === "prod" ? "securegw.paytm.in" : "securegw-stage.paytm.in";
+    const scriptUrl = `https://${domain}/merchantpgpui/checkoutjs/merchants/${mid}.js`;
+
+    const existingScript = document.querySelector(`script[src="${scriptUrl}"]`);
+    if (!existingScript) {
+      const script = document.createElement("script");
+      script.src = scriptUrl;
+      script.type = "text/javascript";
+      script.onload = () => {
+        console.log("Paytm CheckoutJS script loaded successfully");
+      };
+      script.onerror = (err) => {
+        console.error("Failed to load Paytm CheckoutJS script:", err);
+      };
+      document.body.appendChild(script);
+    }
+  }, [isOpen, station]);
 
   // Fetch active, pending, or confirmed bookings for this station to check overlaps
   useEffect(() => {
@@ -120,12 +155,14 @@ export default function BookingModal({ station, isOpen, onClose, onSubmitPayment
 
   const totalCost = (station.pricePerHour / 60) * selectedDuration;
   
-  const upiId = "9173848696@ptsbi"; 
-  const upiUrl = `upi://pay?pa=${upiId}&pn=GameZone&am=${totalCost.toFixed(2)}&tn=Booking_${station.id}`;
+  const handleProceedPayment = async () => {
+    if (conflictError) return;
+    if (isPrebook && (!prebookDate || !prebookTime)) return;
+    if (!user) {
+      console.error("User session not found");
+      return;
+    }
 
-  const handleSubmit = async () => {
-    if (!transactionId.trim() || conflictError) return;
-    
     let startVal: Date | null = null;
     let endVal: Date | null = null;
 
@@ -144,23 +181,63 @@ export default function BookingModal({ station, isOpen, onClose, onSubmitPayment
 
     setIsSubmitting(true);
     try {
-      await onSubmitPayment(
-        station.id, 
-        selectedDuration, 
-        totalCost, 
-        transactionId,
-        isPrebook,
-        startVal,
-        endVal
-      );
-      setTransactionId(""); 
-      setIsPrebook(false);
-      setPrebookDate("");
-      setPrebookTime("");
-      onClose();
+      const response = await fetch("/api/paytm/initiate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          stationId: station.id,
+          durationMinutes: selectedDuration,
+          totalCost: totalCost,
+          isPrebook: isPrebook,
+          scheduledStartTime: startVal ? startVal.toISOString() : null,
+          scheduledEndTime: endVal ? endVal.toISOString() : null,
+          userId: user.uid,
+          userName: user.displayName || user.email || "Anonymous",
+        }),
+      });
+
+      const data = await response.json();
+      const paytm = window.Paytm;
+
+      if (data.success && paytm && paytm.CheckoutJS) {
+        const config = {
+          "root": "",
+          "flow": "DEFAULT",
+          "data": {
+            "orderId": data.orderId,
+            "token": data.txnToken,
+            "tokenType": "TXN_TOKEN",
+            "amount": data.amount
+          },
+          "payMode": {
+            "filter": [
+              {
+                "mode": "UPI"
+              }
+            ]
+          },
+          "handler": {
+            "notifyMerchant": function(eventName: string, response: unknown) {
+              console.log("notifyMerchant response: ", response);
+            }
+          }
+        };
+
+        paytm.CheckoutJS.init(config).then(function onSuccess() {
+          paytm.CheckoutJS.invoke();
+        }).catch(function onError(error: unknown) {
+          console.error("Error invoking Paytm CheckoutJS:", error);
+          setIsSubmitting(false);
+        });
+      } else {
+        console.error("Paytm script not loaded or initiate failed:", data);
+        alert(data.error || "Failed to initiate secure Paytm PG session.");
+        setIsSubmitting(false);
+      }
     } catch (error) {
-      console.error("Failed to submit payment:", error);
-    } finally {
+      console.error("Failed to proceed to payment:", error);
       setIsSubmitting(false);
     }
   };
@@ -262,35 +339,16 @@ export default function BookingModal({ station, isOpen, onClose, onSubmitPayment
             </div>
           )}
 
-          {/* QR & Cost */}
-          <div className="flex flex-col md:flex-row items-center gap-6 p-6 border border-cyan-500/30 bg-cyan-950/20 cyber-cut-reverse">
-            <div className="flex-1 w-full space-y-2">
-              <p className="text-xs text-cyan-500 uppercase tracking-[0.2em]">REQ_FUNDS</p>
+          {/* Cost Display */}
+          <div className="p-6 border border-cyan-500/30 bg-cyan-950/20 cyber-cut-reverse flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-xs text-cyan-500 uppercase tracking-[0.2em]">REQUIRED_FUNDS</p>
               <p className="text-5xl font-black text-yellow-400 drop-shadow-[0_0_10px_rgba(252,238,10,0.5)]">₹{totalCost.toFixed(2)}</p>
-              <p className="text-xs text-slate-400 font-mono pt-2 border-t border-slate-800">
-                &gt; SCAN WITH UPI<br/>
-                &gt; TRANSFER EXACT AMOUNT
-              </p>
             </div>
-            <div className="bg-white p-3 cyber-cut">
-              <QRCodeSVG value={upiUrl} size={120} />
-            </div>
-          </div>
-
-          {/* Transaction Input */}
-          <div className="space-y-2">
-            <label htmlFor="transactionId" className="text-xs text-cyan-400 uppercase tracking-[0.2em] font-bold">
-              INPUT_TXN_HASH (UTR)
-            </label>
-            <div className="flex gap-0 cyber-cut-reverse bg-slate-900 border border-slate-700 focus-within:border-cyan-500 focus-within:shadow-[0_0_15px_rgba(0,240,255,0.2)] transition-all">
-              <span className="p-3 text-slate-500 font-mono border-r border-slate-700">&gt;_</span>
-              <input
-                id="transactionId"
-                placeholder="000000000000"
-                value={transactionId}
-                onChange={(e) => setTransactionId(e.target.value)}
-                className="bg-transparent w-full p-3 text-white font-mono outline-none tracking-widest placeholder:text-slate-600"
-              />
+            <div className="text-right text-[10px] text-slate-400 font-mono space-y-1">
+              <p>&gt; SECURE GATEWAY: PAYTM</p>
+              <p>&gt; PAYMENT MODE: UPI ONLY</p>
+              <p>&gt; INSTANT AUTO-ACTIVATION</p>
             </div>
           </div>
         </div>
@@ -309,14 +367,14 @@ export default function BookingModal({ station, isOpen, onClose, onSubmitPayment
             ABORT
           </button>
           <button 
-            disabled={!transactionId.trim() || isSubmitting || !!conflictError || (isPrebook && (!prebookDate || !prebookTime))} 
-            onClick={handleSubmit}
+            disabled={isSubmitting || !!conflictError || (isPrebook && (!prebookDate || !prebookTime))} 
+            onClick={handleProceedPayment}
             className="flex-1 py-4 bg-cyan-500 hover:bg-cyan-400 text-black font-black tracking-widest uppercase transition-colors disabled:bg-slate-800 disabled:text-slate-600"
           >
             {isSubmitting ? (
-              <span className="flex items-center justify-center animate-pulse"><Loader2 className="w-5 h-5 mr-2 animate-spin" /> PROCESSING</span>
+              <span className="flex items-center justify-center animate-pulse"><Loader2 className="w-5 h-5 mr-2 animate-spin" /> PROVISIONING_UPLINK</span>
             ) : (
-              "TRANSMIT"
+              "PROCEED TO PAY"
             )}
           </button>
         </div>
