@@ -1,14 +1,7 @@
 import type { Metadata } from "next";
-import { Rajdhani } from "next/font/google";
 import "./globals.css";
-import { cn } from "@/lib/utils";
 import { AuthProvider } from "@/contexts/AuthContext";
-
-const rajdhani = Rajdhani({ 
-  subsets: ["latin"], 
-  weight: ["300", "400", "500", "600", "700"],
-  variable: "--font-sans" 
-});
+import { ToastProvider } from "@/components/gamezone/Toast";
 
 export const metadata: Metadata = {
   title: "Gamezone Command Center",
@@ -21,10 +14,24 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn("dark font-sans", rajdhani.variable)}>
-      <body className="antialiased min-h-screen scanlines">
+    <html lang="en" className="dark">
+      <head>
+        {/* Load Rajdhani via browser-side link — avoids Next.js build-time Google Fonts fetch timeout */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body
+        className="antialiased min-h-screen scanlines"
+        style={{ fontFamily: "'Rajdhani', 'Segoe UI', system-ui, sans-serif" }}
+      >
         <AuthProvider>
-          {children}
+          <ToastProvider>
+            {children}
+          </ToastProvider>
         </AuthProvider>
       </body>
     </html>

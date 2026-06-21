@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Search, Plus, Sparkles } from "lucide-react";
-import { GAME_CATALOG, CatalogGame, getGameFromCatalog } from "@/lib/gameCatalog";
+import { GAME_CATALOG, CatalogGame, getGameFromCatalog, matchesGame } from "@/lib/gameCatalog";
 import { Game } from "@/types";
 
 interface Props {
@@ -31,7 +31,7 @@ export default function GameSearchBar({ onAddGame, excludeGames }: Props) {
     }
 
     const filtered = GAME_CATALOG.filter(game =>
-      game.name.toLowerCase().includes(query.toLowerCase()) &&
+      matchesGame(game.name, query) &&
       !isAlreadyAdded(game.name)
     ).slice(0, 5); // Limit to top 5 suggestions
 

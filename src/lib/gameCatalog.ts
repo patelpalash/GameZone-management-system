@@ -131,6 +131,50 @@ export const GAME_CATALOG: CatalogGame[] = [
   {
     name: "League of Legends",
     posterUrl: "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=200"
+  },
+  {
+    name: "Forza Horizon 6",
+    posterUrl: "https://images.unsplash.com/photo-1511919884226-fd3cad34687c?auto=format&fit=crop&q=80&w=200"
+  },
+  {
+    name: "Grand Theft Auto VI",
+    posterUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=200"
+  },
+  {
+    name: "Call of Duty: Black Ops 6",
+    posterUrl: "https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/2933080/library_600x900.jpg"
+  },
+  {
+    name: "EA SPORTS FC 25",
+    posterUrl: "https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/2693820/library_600x900.jpg"
+  },
+  {
+    name: "Black Myth: Wukong",
+    posterUrl: "https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/2358720/library_600x900.jpg"
+  },
+  {
+    name: "Hades II",
+    posterUrl: "https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/1145350/library_600x900.jpg"
+  },
+  {
+    name: "God of War Ragnarök",
+    posterUrl: "https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/2322010/library_600x900.jpg"
+  },
+  {
+    name: "Ghost of Tsushima DIRECTOR'S CUT",
+    posterUrl: "https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/2215430/library_600x900.jpg"
+  },
+  {
+    name: "Alan Wake 2",
+    posterUrl: "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?auto=format&fit=crop&q=80&w=200"
+  },
+  {
+    name: "Marvel's Spider-Man 2",
+    posterUrl: "https://images.unsplash.com/photo-1608889175123-8ec330b86f84?auto=format&fit=crop&q=80&w=200"
+  },
+  {
+    name: "Assassin's Creed Shadows",
+    posterUrl: "https://images.unsplash.com/photo-1538481199705-c710c4e965fc?auto=format&fit=crop&q=80&w=200"
   }
 ];
 
@@ -171,4 +215,59 @@ export function getGameFromCatalog(name: string): CatalogGame {
     name,
     posterUrl: generatePlaceholderPoster(name)
   };
+}
+
+export function matchesGame(gameName: string, query: string): boolean {
+  const cleanQuery = query.toLowerCase().trim();
+  if (!cleanQuery) return false;
+  
+  const cleanName = gameName.toLowerCase();
+  
+  // Direct inclusion
+  if (cleanName.includes(cleanQuery)) return true;
+  
+  // Split query into words/tokens (splitting also on letter-number boundary e.g. cs2 -> ["cs", "2"])
+  const queryWords = cleanQuery.split(/(?=[0-9])|(?<=[0-9])|[\s:_-]+/);
+  
+  // Abbreviation mapping table
+  const abbreviations: Record<string, string[]> = {
+    gta: ["grand", "theft", "auto"],
+    cod: ["call", "of", "duty"],
+    cs: ["counter", "strike"],
+    fc: ["ea", "sports", "fc"],
+    fifa: ["ea", "sports", "fc", "fifa"],
+    bo: ["black", "ops"],
+    mw: ["modern", "warfare"],
+    fh: ["forza", "horizon"]
+  };
+
+  // Roman numerals mapping
+  const numerals: Record<string, string> = {
+    "1": "i", "2": "ii", "3": "iii", "4": "iv", "5": "v", "6": "vi", "7": "vii", "8": "viii", "9": "ix", "10": "x",
+    "i": "1", "ii": "2", "iii": "3", "iv": "4", "v": "5", "vi": "6", "vii": "7", "viii": "8", "ix": "9", "x": "10"
+  };
+
+  // Expand abbreviations in query words
+  const expandedWords: string[] = [];
+  for (const word of queryWords) {
+    if (abbreviations[word]) {
+      expandedWords.push(...abbreviations[word]);
+    } else {
+      expandedWords.push(word);
+    }
+  }
+
+  // Every word in query must be represented in the game name
+  return expandedWords.every(word => {
+    if (cleanName.includes(word)) return true;
+    
+    // Check Roman numeral equivalence
+    if (numerals[word]) {
+      const equiv = numerals[word];
+      const regex = new RegExp(`\\b${equiv}\\b`);
+      if (regex.test(cleanName)) return true;
+    }
+    
+    return false;
+  });
 }

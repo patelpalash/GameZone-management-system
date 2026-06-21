@@ -1,13 +1,14 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { User, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from "firebase/auth";
+import { User, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, setPersistence, browserLocalPersistence, updateProfile } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
+  updateUserProfile: (displayName: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -15,6 +16,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   signInWithGoogle: async () => {},
+  updateUserProfile: async () => {},
   logout: async () => {},
 });
 
@@ -24,8 +26,7 @@ export function useAuth() {
 
 // Define admin emails here. Only these users can access /admin.
 export const ADMIN_EMAILS: string[] = [
-  // Add your email here, e.g.:
-  // "youremail@gmail.com",
+  "patelpalash57work@gmail.com",
 ];
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -44,9 +45,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
     try {
+      // Explicitly enforce LOCAL persistence so the session survives page reloads
+      await setPersistence(auth, browserLocalPersistence);
       await signInWithPopup(auth, provider);
     } catch (error) {
       console.error("Error signing in with Google:", error);
+    }
+  };
+
+  const updateUserProfile = async (displayName: string) => {
+    try {
+      if (auth.currentUser) {
+        await updateProfile(auth.currentUser, { displayName });
+        // Force state update to trigger client rerender
+        setUser({ ...auth.currentUser });
+      }
+    } catch (error) {
+      console.error("Error updating user profile name:", error);
+      throw error;
     }
   };
 
@@ -59,7 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle, logout }}>
+    <AuthContext.Provider value={{ user, loading, signInWithGoogle, updateUserProfile, logout }}>
       {children}
     </AuthContext.Provider>
   );

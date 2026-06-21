@@ -4,12 +4,14 @@ import { useState } from "react";
 import VerificationQueue from "@/components/gamezone/VerificationQueue";
 import StationControl from "@/components/gamezone/StationControl";
 import AccountingDashboard from "@/components/gamezone/AccountingDashboard";
+import AdminTournamentsManager from "@/components/gamezone/AdminTournamentsManager";
 import AdminGuard from "@/components/gamezone/AdminGuard";
-import { ShieldAlert, ArrowLeft, Terminal, DollarSign } from "lucide-react";
+import AdminPaymentHistory from "@/components/gamezone/AdminPaymentHistory";
+import { ShieldAlert, ArrowLeft, Terminal, DollarSign, Gamepad2, History } from "lucide-react";
 import NextLink from "next/link";
 
 export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState<"operations" | "finance">("operations");
+  const [activeTab, setActiveTab] = useState<"operations" | "finance" | "tournaments" | "payments">("operations");
 
   return (
     <AdminGuard>
@@ -41,10 +43,22 @@ export default function AdminDashboard() {
             <Terminal className="w-4 h-4" /> LIVE_OPERATIONS
           </button>
           <button 
+            onClick={() => setActiveTab("tournaments")}
+            className={`px-6 py-3 font-black tracking-widest uppercase text-sm cyber-cut transition-all flex items-center gap-2 ${activeTab === 'tournaments' ? 'bg-pink-500 text-black glow-pink' : 'text-slate-400 border border-slate-800 hover:text-pink-500'}`}
+          >
+            <Gamepad2 className="w-4 h-4" /> TOURNAMENTS_MANAGER
+          </button>
+          <button 
             onClick={() => setActiveTab("finance")}
             className={`px-6 py-3 font-black tracking-widest uppercase text-sm cyber-cut transition-all flex items-center gap-2 ${activeTab === 'finance' ? 'bg-emerald-500 text-black glow-emerald' : 'text-slate-400 border border-slate-800 hover:text-emerald-500'}`}
           >
             <DollarSign className="w-4 h-4" /> FINANCE_LEDGER
+          </button>
+          <button 
+            onClick={() => setActiveTab("payments")}
+            className={`px-6 py-3 font-black tracking-widest uppercase text-sm cyber-cut transition-all flex items-center gap-2 ${activeTab === 'payments' ? 'bg-yellow-500 text-black glow-yellow' : 'text-slate-400 border border-slate-800 hover:text-yellow-500'}`}
+          >
+            <History className="w-4 h-4" /> PAYMENT_HISTORY
           </button>
         </div>
 
@@ -60,11 +74,21 @@ export default function AdminDashboard() {
           </div>
         )}
 
-
+        {activeTab === "tournaments" && (
+          <div className="min-h-[calc(100vh-240px)]">
+            <AdminTournamentsManager />
+          </div>
+        )}
 
         {activeTab === "finance" && (
           <div className="min-h-[calc(100vh-240px)]">
             <AccountingDashboard />
+          </div>
+        )}
+
+        {activeTab === "payments" && (
+          <div className="min-h-[calc(100vh-240px)]">
+            <AdminPaymentHistory />
           </div>
         )}
 

@@ -61,7 +61,7 @@ export default function StationCard({ station, endTime, onBookNow, confirmedBook
         
         <div>
           <p className="text-[10px] text-cyan-500/70 uppercase tracking-[0.2em] mb-2 font-bold">INSTALLED_GAMES</p>
-          <div className="flex flex-wrap gap-2 pb-1 max-w-full">
+          <div className="flex flex-wrap gap-2 pb-1 max-w-full overflow-hidden">
             {station.games.map((game, idx) => {
               const isString = typeof game === "string";
               const gameName = isString ? game : game.name;
@@ -83,9 +83,11 @@ export default function StationCard({ station, endTime, onBookNow, confirmedBook
                   <img 
                     src={posterUrl} 
                     alt={gameName} 
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                    loading="lazy"
+                    decoding="async"
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300 pointer-events-none"
                   />
-                  <div className="absolute inset-0 bg-black/85 opacity-0 group-hover:opacity-100 flex items-center justify-center p-1 text-[8px] font-black text-center text-white tracking-wider uppercase transition-opacity duration-200 leading-tight">
+                  <div className="absolute inset-0 bg-black/85 opacity-0 group-hover:opacity-100 flex items-center justify-center p-1 text-[8px] font-black text-center text-white tracking-wider uppercase transition-opacity duration-200 leading-tight pointer-events-none">
                     {gameName}
                   </div>
                 </div>
@@ -102,14 +104,14 @@ export default function StationCard({ station, endTime, onBookNow, confirmedBook
           <div className="mt-3 pt-3 border-t border-slate-800/80 space-y-1">
             <p className="text-[10px] text-yellow-500/80 uppercase tracking-widest font-bold font-mono">NEXT_RESERVATION:</p>
             <div className="space-y-1">
-              {confirmedBookings
+              {[...confirmedBookings]
                 .sort((a, b) => (a.scheduledStartTime?.toMillis() || 0) - (b.scheduledStartTime?.toMillis() || 0))
                 .slice(0, 1) // Just show the next one to keep the user card clean
                 .map(b => {
                   const bDate = b.scheduledStartTime?.toDate();
                   if (!bDate) return null;
                   const isToday = bDate.toDateString() === new Date().toDateString();
-                  const timeStr = bDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                  const timeStr = bDate.toLocaleTimeString("en-US", { hour: '2-digit', minute: '2-digit', hour12: true });
                   const dateStr = isToday ? "Today" : bDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
                   
                   return (
@@ -125,7 +127,7 @@ export default function StationCard({ station, endTime, onBookNow, confirmedBook
       </div>
 
       {/* Footer / Actions */}
-      <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between">
+      <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between relative z-10">
         <div className="flex items-end gap-1">
           <span className="text-2xl font-black text-white">₹{station.pricePerHour}</span>
           <span className="text-xs text-cyan-500/70 uppercase tracking-widest mb-1">/HR</span>
@@ -133,8 +135,9 @@ export default function StationCard({ station, endTime, onBookNow, confirmedBook
 
         {isAvailable && (
           <button 
-            className="bg-yellow-400 hover:bg-yellow-300 text-black font-black uppercase tracking-widest px-6 py-2 cyber-cut glow-yellow hover-glitch transition-all active:scale-95"
-            onClick={() => onBookNow(station)}
+            type="button"
+            className="bg-yellow-400 hover:bg-yellow-300 text-black font-black uppercase tracking-widest px-6 py-2 cyber-cut glow-yellow transition-all active:scale-95 relative z-10 cursor-pointer select-none"
+            onClick={(e) => { e.stopPropagation(); onBookNow(station); }}
           >
             INITIATE
           </button>

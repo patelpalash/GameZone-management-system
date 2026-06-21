@@ -12,11 +12,26 @@ interface Props {
   onToggleMaintenance: (station: Station) => void;
   onDeleteStation?: (station: Station) => void;
   onEditStation?: (station: Station) => void;
+  onViewHistory?: (station: Station) => void;
   confirmedBookings?: Booking[];
+  activeBookings?: Booking[];
   onActivatePrebook?: (booking: Booking) => void;
+  onAssignWalkIn?: (station: Station) => void;
 }
 
-export default function DraggableStationGrid({ stations, containerId, onEndSession, onToggleMaintenance, onDeleteStation, onEditStation, confirmedBookings, onActivatePrebook }: Props) {
+export default function DraggableStationGrid({ 
+  stations, 
+  containerId, 
+  onEndSession, 
+  onToggleMaintenance, 
+  onDeleteStation, 
+  onEditStation, 
+  onViewHistory, 
+  confirmedBookings, 
+  activeBookings,
+  onActivatePrebook,
+  onAssignWalkIn
+}: Props) {
   const { setNodeRef, isOver } = useDroppable({
     id: containerId,
   });
@@ -48,6 +63,7 @@ export default function DraggableStationGrid({ stations, containerId, onEndSessi
       >
         {stations.map((station) => {
           const stationPrebooks = (confirmedBookings || []).filter(b => b.stationId === station.id);
+          const stationActive = (activeBookings || []).find(b => b.stationId === station.id && b.status === "active");
           return (
             <SortableStationCard 
               key={station.id} 
@@ -56,8 +72,11 @@ export default function DraggableStationGrid({ stations, containerId, onEndSessi
               onToggleMaintenance={onToggleMaintenance}
               onDeleteStation={onDeleteStation}
               onEditStation={onEditStation}
+              onViewHistory={onViewHistory}
               confirmedBookings={stationPrebooks}
+              activeBooking={stationActive}
               onActivatePrebook={onActivatePrebook}
+              onAssignWalkIn={onAssignWalkIn}
             />
           );
         })}

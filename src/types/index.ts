@@ -24,14 +24,15 @@ export interface Booking {
   userName?: string;
   durationMinutes: number;
   totalCost: number;
-  status: "pending" | "confirmed" | "active" | "completed";
+  status: "pending" | "pending_payment" | "confirmed" | "active" | "completed" | "failed";
   transactionId: string;
-  paymentMethod?: "UPI" | "Cash"; // For Accounting
+  paymentMethod?: "UPI" | "UPI_MOCK" | "Cash" | "PhonePe_UPI"; // For Accounting
   startTime: Timestamp | null;
   endTime: Timestamp | null;
   isPrebook?: boolean;
   scheduledStartTime?: Timestamp | null;
   scheduledEndTime?: Timestamp | null;
+  createdAt?: Timestamp | null;
 }
 
 export interface User {
@@ -40,3 +41,24 @@ export interface User {
   phone: string;
   totalHoursPlayed: number;
 }
+
+export interface TournamentRegistration {
+  teamName: string;
+  players: string[]; // List of player names
+  registeredBy: string; // User ID of captain
+  contactPhone: string;
+  registeredAt: Timestamp;
+}
+
+export interface Tournament {
+  id: string;
+  title: string;
+  gameName: string;
+  description: string;
+  date: Timestamp;
+  maxTeams: number;
+  registeredTeams: TournamentRegistration[];
+  status: "upcoming" | "active" | "completed";
+  prizePool: string;
+}
+

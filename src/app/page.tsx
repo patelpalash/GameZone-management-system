@@ -3,9 +3,11 @@
 import { useState } from "react";
 import NextLink from "next/link";
 import { TerminalSquare, Crosshair, MapPin, Phone, Mail, Globe, Menu, X } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function LandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user, loading } = useAuth();
 
   return (
     <div className="min-h-screen text-slate-100 selection:bg-cyan-500/30">
@@ -28,12 +30,21 @@ export default function LandingPage() {
           </div>
           
           <div className="flex items-center gap-3">
-            <NextLink 
-              href="/login"
-              className="bg-yellow-400 text-black px-4 md:px-6 py-2 font-black tracking-widest uppercase cyber-cut glow-yellow hover-glitch transition-all active:scale-95 text-sm"
-            >
-              SYS_LOGIN
-            </NextLink>
+            {!loading && user ? (
+              <NextLink 
+                href="/dashboard"
+                className="bg-cyan-500 text-black px-4 md:px-6 py-2 font-black tracking-widest uppercase cyber-cut glow-cyan hover-glitch transition-all active:scale-95 text-sm"
+              >
+                SYS_DASHBOARD
+              </NextLink>
+            ) : (
+              <NextLink 
+                href="/login"
+                className="bg-yellow-400 text-black px-4 md:px-6 py-2 font-black tracking-widest uppercase cyber-cut glow-yellow hover-glitch transition-all active:scale-95 text-sm"
+              >
+                SYS_LOGIN
+              </NextLink>
+            )}
             
             {/* Mobile Hamburger */}
             <button 
@@ -74,12 +85,21 @@ export default function LandingPage() {
             High-performance rigs. Ultra-low latency. The ultimate cybernetic arena for serious players. Plug in and dominate.
           </p>
           <div className="flex flex-col sm:flex-row gap-6">
-            <NextLink 
-              href="/login"
-              className="px-8 py-4 bg-cyan-500 text-black font-black tracking-[0.2em] text-xl uppercase cyber-cut glow-cyan hover:bg-cyan-400 transition-all flex items-center justify-center gap-3"
-            >
-              <Crosshair size={24} /> BOOK_STATION
-            </NextLink>
+            {!loading && user ? (
+              <NextLink 
+                href="/dashboard"
+                className="px-8 py-4 bg-cyan-500 text-black font-black tracking-[0.2em] text-xl uppercase cyber-cut glow-cyan hover:bg-cyan-400 transition-all flex items-center justify-center gap-3"
+              >
+                <Crosshair size={24} /> GO_TO_DASHBOARD
+              </NextLink>
+            ) : (
+              <NextLink 
+                href="/login"
+                className="px-8 py-4 bg-cyan-500 text-black font-black tracking-[0.2em] text-xl uppercase cyber-cut glow-cyan hover:bg-cyan-400 transition-all flex items-center justify-center gap-3"
+              >
+                <Crosshair size={24} /> BOOK_STATION
+              </NextLink>
+            )}
           </div>
         </div>
       </section>

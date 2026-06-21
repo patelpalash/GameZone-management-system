@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useAuth, ADMIN_EMAILS } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { Loader2, ShieldOff } from "lucide-react";
@@ -8,6 +9,14 @@ import NextLink from "next/link";
 export default function AdminGuard({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
+
+  const isAdmin = user ? ADMIN_EMAILS.includes(user.email || "") : false;
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login");
+    }
+  }, [user, loading, router]);
 
   if (loading) {
     return (
@@ -20,12 +29,11 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
     );
   }
 
+
+
   if (!user) {
-    router.push("/login");
     return null;
   }
-
-  const isAdmin = ADMIN_EMAILS.length === 0 || ADMIN_EMAILS.includes(user.email || "");
 
   if (!isAdmin) {
     return (

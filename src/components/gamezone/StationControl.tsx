@@ -7,6 +7,8 @@ import { Station, Game, Booking } from "@/types";
 import { MonitorPlay, LayoutGrid, Gamepad2, Plus, X, AlertCircle, Cpu } from "lucide-react";
 import DraggableStationGrid from "./DraggableStationGrid";
 import GameSearchBar from "./GameSearchBar";
+import BookingHistoryModal from "./BookingHistoryModal";
+import OfflineBookingModal from "./OfflineBookingModal";
 
 import {
   DndContext,
@@ -60,12 +62,17 @@ function DraggableTemplateCard({ id, type, label, icon: Icon }: { id: string; ty
 export default function StationControl() {
   const [stations, setStations] = useState<Station[]>([]);
   const [confirmedBookings, setConfirmedBookings] = useState<Booking[]>([]);
+  const [activeBookings, setActiveBookings] = useState<Booking[]>([]);
+
+  // History modal state
+  const [historyStation, setHistoryStation] = useState<Station | null>(null);
 
   // Modal State for drag-provisioning
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<"PC" | "PS5" | "Xbox">("PC");
   const [modalTargetIndex, setModalTargetIndex] = useState(0);
   const [editingStation, setEditingStation] = useState<Station | null>(null);
+  const [offlineStation, setOfflineStation] = useState<Station | null>(null);
 
   // Form State inside Modal
   const [newName, setNewName] = useState("");
@@ -104,6 +111,110 @@ export default function StationControl() {
 
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const q = query(collection(db, "bookings"), where("status", "==", "active"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data: Booking[] = [];
+      snapshot.forEach((docSnap) => {
+        data.push({ id: docSnap.id, ...docSnap.data() } as Booking);
+      });
+      setActiveBookings(data);
+    }, (error) => {
+      console.error("Error listening to active bookings:", error);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Client-side auto-expiry of active sessions
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date();
+      activeBookings.forEach(async (booking) => {
+        if (booking.endTime) {
+          const endTimeDate = booking.endTime.toDate();
+          if (endTimeDate <= now) {
+            console.log(`Auto-expiring session ${booking.id} for station ${booking.stationId}`);
+            try {
+              // Re-check booking status to prevent race condition with other clients
+              const bookingRef = doc(db, "bookings", booking.id);
+              const { getDoc } = await import("firebase/firestore");
+              const freshSnap = await getDoc(bookingRef);
+              if (!freshSnap.exists() || freshSnap.data()?.status !== "active") return;
+
+              const batch = writeBatch(db);
+              const stationRef = doc(db, "stations", booking.stationId);
+
+              batch.update(stationRef, {
+                status: "available",
+                currentSessionId: null,
+              });
+
+              batch.update(bookingRef, {
+                status: "completed",
+              });
+
+              await batch.commit();
+            } catch (err) {
+              console.error("Error auto-ending session:", err);
+            }
+          }
+        }
+      });
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [activeBookings]);
+
+  // Client-side auto-activation of confirmed pre-booked sessions
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date();
+      confirmedBookings.forEach(async (booking) => {
+        if (booking.scheduledStartTime && booking.scheduledEndTime) {
+          const startTimeDate = booking.scheduledStartTime.toDate();
+          if (startTimeDate <= now) {
+            console.log(`Auto-activating pre-booked session ${booking.id} for station ${booking.stationId}`);
+            try {
+              // Re-check booking status to prevent race condition
+              const bookingRef = doc(db, "bookings", booking.id);
+              const { getDoc } = await import("firebase/firestore");
+              const freshSnap = await getDoc(bookingRef);
+              if (!freshSnap.exists() || freshSnap.data()?.status !== "confirmed") return;
+
+              // Check if station is available
+              const stationRef = doc(db, "stations", booking.stationId);
+              const stationSnap = await getDoc(stationRef);
+              if (!stationSnap.exists() || stationSnap.data()?.status === "occupied") {
+                // If it's currently occupied, we wait for it to be freed
+                return; 
+              }
+
+              const batch = writeBatch(db);
+
+              batch.update(stationRef, {
+                status: "occupied",
+                currentSessionId: booking.id,
+              });
+
+              batch.update(bookingRef, {
+                status: "active",
+                startTime: booking.scheduledStartTime,
+                endTime: booking.scheduledEndTime,
+              });
+
+              await batch.commit();
+            } catch (err) {
+              console.error("Error auto-activating session:", err);
+            }
+          }
+        }
+      });
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [confirmedBookings]);
 
   const handleActivatePrebook = async (booking: Booking) => {
     try {
@@ -401,8 +512,11 @@ export default function StationControl() {
               onToggleMaintenance={handleToggleMaintenance}
               onDeleteStation={handleDeleteStation}
               onEditStation={handleEditStation}
+              onViewHistory={(s) => setHistoryStation(s)}
               confirmedBookings={confirmedBookings}
+              activeBookings={activeBookings}
               onActivatePrebook={handleActivatePrebook}
+              onAssignWalkIn={setOfflineStation}
             />
           </div>
 
@@ -419,8 +533,11 @@ export default function StationControl() {
               onToggleMaintenance={handleToggleMaintenance}
               onDeleteStation={handleDeleteStation}
               onEditStation={handleEditStation}
+              onViewHistory={(s) => setHistoryStation(s)}
               confirmedBookings={confirmedBookings}
+              activeBookings={activeBookings}
               onActivatePrebook={handleActivatePrebook}
+              onAssignWalkIn={setOfflineStation}
             />
           </div>
         </div>
@@ -581,6 +698,22 @@ export default function StationControl() {
           </div>
         </div>
       )}
+
+      {/* Booking History Modal */}
+      {historyStation && (
+        <BookingHistoryModal
+          station={historyStation}
+          onClose={() => setHistoryStation(null)}
+        />
+      )}
+
+      {/* Offline Booking Modal */}
+      <OfflineBookingModal
+        station={offlineStation}
+        isOpen={!!offlineStation}
+        onClose={() => setOfflineStation(null)}
+        stationBookings={confirmedBookings.filter(b => b.stationId === offlineStation?.id)}
+      />
     </DndContext>
   );
 }
