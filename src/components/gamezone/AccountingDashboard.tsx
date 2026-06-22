@@ -302,16 +302,16 @@ export default function AccountingDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between mb-6 pb-2 border-b border-emerald-500/30">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 pb-2 border-b border-emerald-500/30 gap-4">
         <h2 className="text-2xl font-black tracking-widest uppercase text-emerald-500 flex items-center gap-2">
            <TrendingUp className="w-6 h-6" /> MASTER_LEDGER
         </h2>
         
         {/* Navigation Tabs */}
-        <div className="flex gap-2">
-          <button onClick={() => setActiveTab("ledger")} className={`px-4 py-2 font-black uppercase text-xs tracking-widest cyber-cut transition-all ${activeTab === 'ledger' ? 'bg-emerald-500 text-black' : 'border border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10'}`}>Overview</button>
-          <button onClick={() => setActiveTab("inventory")} className={`px-4 py-2 font-black uppercase text-xs tracking-widest cyber-cut transition-all ${activeTab === 'inventory' ? 'bg-cyan-500 text-black' : 'border border-cyan-500/30 text-cyan-500 hover:bg-cyan-500/10'}`}>Inventory</button>
-          <button onClick={() => setActiveTab("expenses")} className={`px-4 py-2 font-black uppercase text-xs tracking-widest cyber-cut transition-all ${activeTab === 'expenses' ? 'bg-pink-500 text-black' : 'border border-pink-500/30 text-pink-500 hover:bg-pink-500/10'}`}>Expenses</button>
+        <div className="flex gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 hide-scrollbar">
+          <button onClick={() => setActiveTab("ledger")} className={`px-4 py-2 font-black uppercase text-xs tracking-widest cyber-cut transition-all shrink-0 ${activeTab === 'ledger' ? 'bg-emerald-500 text-black' : 'border border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10'}`}>Overview</button>
+          <button onClick={() => setActiveTab("inventory")} className={`px-4 py-2 font-black uppercase text-xs tracking-widest cyber-cut transition-all shrink-0 ${activeTab === 'inventory' ? 'bg-cyan-500 text-black' : 'border border-cyan-500/30 text-cyan-500 hover:bg-cyan-500/10'}`}>Inventory</button>
+          <button onClick={() => setActiveTab("expenses")} className={`px-4 py-2 font-black uppercase text-xs tracking-widest cyber-cut transition-all shrink-0 ${activeTab === 'expenses' ? 'bg-pink-500 text-black' : 'border border-pink-500/30 text-pink-500 hover:bg-pink-500/10'}`}>Expenses</button>
         </div>
       </div>
 

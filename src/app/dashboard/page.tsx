@@ -199,24 +199,24 @@ function DashboardContent() {
             </p>
           </div>
         </div>
-        <div className="flex gap-3 flex-wrap items-center">
+        <div className="flex gap-2 sm:gap-3 flex-wrap items-center w-full md:w-auto">
           {/* User Info */}
-          <div className="flex items-center gap-2 px-3 py-2 border border-slate-700 bg-slate-900/50 text-sm">
+          <div className="flex items-center gap-2 px-3 py-1.5 sm:py-2 border border-slate-700 bg-slate-900/50">
             <User size={14} className="text-cyan-400" />
-            <span className="text-slate-400 font-mono text-xs truncate max-w-[120px]">{user?.displayName || user?.email}</span>
+            <span className="text-slate-400 font-mono text-xs truncate max-w-[100px] sm:max-w-[120px]">{user?.displayName || user?.email}</span>
           </div>
-          <NextLink href="/profile" className="px-4 py-2 border border-yellow-500 text-yellow-500 hover:bg-yellow-500/10 font-bold tracking-widest uppercase text-sm cyber-cut flex items-center gap-2 transition-all">
+          <NextLink href="/profile" className="px-3 sm:px-4 py-1.5 sm:py-2 border border-yellow-500 text-yellow-500 hover:bg-yellow-500/10 font-bold tracking-widest uppercase text-[10px] sm:text-sm cyber-cut flex items-center gap-1 sm:gap-2 transition-all">
             <User size={14} /> PROFILE
           </NextLink>
-          <NextLink href="/" className="px-4 py-2 border border-cyan-500 text-cyan-500 hover:bg-cyan-500/10 font-bold tracking-widest uppercase text-sm cyber-cut flex items-center gap-2 transition-all">
+          <NextLink href="/" className="px-3 sm:px-4 py-1.5 sm:py-2 border border-cyan-500 text-cyan-500 hover:bg-cyan-500/10 font-bold tracking-widest uppercase text-[10px] sm:text-sm cyber-cut flex items-center gap-1 sm:gap-2 transition-all">
             <ArrowLeft size={14} /> MAIN_NET
           </NextLink>
           {isAdmin && (
-            <NextLink href="/admin" className="px-4 py-2 border border-pink-500 text-pink-500 hover:bg-pink-500/10 font-bold tracking-widest uppercase text-sm cyber-cut-reverse flex items-center gap-2 transition-all">
+            <NextLink href="/admin" className="px-3 sm:px-4 py-1.5 sm:py-2 border border-pink-500 text-pink-500 hover:bg-pink-500/10 font-bold tracking-widest uppercase text-[10px] sm:text-sm cyber-cut-reverse flex items-center gap-1 sm:gap-2 transition-all">
               <ShieldAlert size={14} /> ADMIN
             </NextLink>
           )}
-          <button onClick={handleLogout} className="px-4 py-2 border border-slate-600 text-slate-400 hover:bg-slate-800 hover:text-white font-bold tracking-widest uppercase text-sm flex items-center gap-2 transition-all">
+          <button onClick={handleLogout} className="px-3 sm:px-4 py-1.5 sm:py-2 border border-slate-600 text-slate-400 hover:bg-slate-800 hover:text-white font-bold tracking-widest uppercase text-[10px] sm:text-sm flex items-center gap-1 sm:gap-2 transition-all">
             <LogOut size={14} /> EXIT
           </button>
         </div>

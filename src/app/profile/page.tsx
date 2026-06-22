@@ -184,7 +184,7 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen p-4 md:p-8">
       {/* HUD Header */}
-      <header className="mb-8 flex items-center justify-between border-b-2 border-cyan-500/30 pb-4 gap-4">
+      <header className="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between border-b-2 border-cyan-500/30 pb-4 gap-4">
         <div className="flex items-center gap-4">
           <div className="p-3 bg-cyan-500 text-black cyber-cut-reverse">
             <User className="w-7 h-7" />
@@ -200,7 +200,7 @@ export default function ProfilePage() {
         </div>
         <NextLink
           href="/dashboard"
-          className="px-4 py-2 border border-cyan-500 text-cyan-500 hover:bg-cyan-500/10 font-bold tracking-widest uppercase text-sm cyber-cut flex items-center gap-2 transition-all shrink-0"
+          className="px-4 py-2 border border-cyan-500 text-cyan-500 hover:bg-cyan-500/10 font-bold tracking-widest uppercase text-sm cyber-cut flex items-center gap-2 transition-all shrink-0 self-start sm:self-auto"
         >
           <ArrowLeft size={14} /> BACK_TO_GRID
         </NextLink>

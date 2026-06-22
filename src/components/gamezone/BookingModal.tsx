@@ -376,11 +376,11 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
         onClose();
       }
     }}>
-      <DialogContent className="sm:max-w-xl bg-black border-2 border-cyan-500 shadow-[0_0_30px_rgba(0,240,255,0.2)] p-0 gap-0 cyber-cut overflow-hidden max-h-[90vh] flex flex-col">
+      <DialogContent className="w-[95vw] max-w-full sm:max-w-xl bg-black border-2 border-cyan-500 shadow-[0_0_30px_rgba(0,240,255,0.2)] p-0 gap-0 cyber-cut overflow-hidden max-h-[95vh] sm:max-h-[90vh] flex flex-col mx-auto">
         
         {/* Header */}
         <div className="bg-cyan-500 text-black p-4 flex items-center justify-between shrink-0">
-          <DialogTitle className="text-2xl font-black tracking-widest uppercase flex items-center gap-2 m-0">
+          <DialogTitle className="text-lg sm:text-2xl font-black tracking-widest uppercase flex items-center gap-2 m-0">
             <TerminalSquare size={24} />
             SECURE_UPLINK :: {station.name}
           </DialogTitle>
@@ -482,7 +482,7 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
                       </div>
                     )}
 
-                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5 max-h-[140px] overflow-y-auto p-1 border border-slate-800 bg-black/40">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5 max-h-[140px] overflow-y-auto p-1 border border-slate-800 bg-black/40">
                       {timeSlots.filter(slot => !isSlotConflicted(slot.value)).length === 0 ? (
                         <div className="col-span-full py-4 text-center text-red-400 font-mono text-[10px] uppercase tracking-wider">
                           &gt; NO_SLOTS_AVAILABLE_ON_THIS_DATE
@@ -583,7 +583,7 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
           <div className="p-6 border border-cyan-500/30 bg-cyan-950/20 cyber-cut-reverse flex items-center justify-between">
             <div className="space-y-1">
               <p className="text-xs text-cyan-500 uppercase tracking-[0.2em]">REQUIRED_FUNDS</p>
-              <p className="text-5xl font-black text-yellow-400 drop-shadow-[0_0_10px_rgba(252,238,10,0.5)]">₹{totalCost.toFixed(2)}</p>
+              <p className="text-3xl sm:text-5xl font-black text-yellow-400 drop-shadow-[0_0_10px_rgba(252,238,10,0.5)]">₹{totalCost.toFixed(2)}</p>
             </div>
             <div className="text-right text-[10px] text-slate-400 font-mono space-y-1">
               <p>&gt; SECURE GATEWAY: PHONEPE</p>
@@ -607,14 +607,14 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
         <div className="flex border-t border-slate-800 bg-black shrink-0">
           <button 
             onClick={onClose} 
-            className="flex-1 py-4 text-slate-400 hover:text-white hover:bg-slate-900 font-bold tracking-widest uppercase transition-colors"
+            className="flex-1 py-4 text-slate-400 hover:text-white hover:bg-slate-900 font-bold tracking-widest uppercase transition-colors text-sm sm:text-base"
           >
             ABORT
           </button>
           <button 
             disabled={isSubmitting || !!conflictError || (isPrebook && (!prebookDate || !prebookTime))} 
             onClick={handleProceedPayment}
-            className="flex-1 py-4 font-black tracking-widest uppercase transition-colors disabled:bg-slate-800 disabled:text-slate-600 bg-cyan-500 hover:bg-cyan-400 text-black"
+            className="flex-1 py-4 font-black tracking-widest uppercase transition-colors disabled:bg-slate-800 disabled:text-slate-600 bg-cyan-500 hover:bg-cyan-400 text-black text-sm sm:text-base"
           >
             {isSubmitting ? (
               <span className="flex items-center justify-center animate-pulse"><Loader2 className="w-5 h-5 mr-2 animate-spin" /> PROVISIONING...</span>
