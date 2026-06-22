@@ -324,7 +324,7 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
     setIsSubmitting(true);
     setError(null);
     try {
-      const idToken = await auth.currentUser?.getIdToken();
+      const idToken = await auth.currentUser?.getIdToken(true);
       const response = await fetch("/api/phonepe/initiate", {
         method: "POST",
         headers: {
