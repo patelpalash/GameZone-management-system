@@ -38,13 +38,11 @@ function getAdminApp(): admin.app.App {
     });
   }
 
-  // No credentials — fail hard in production, warn in development
-  if (process.env.NODE_ENV === "production") {
-    throw new Error(
-      "[Firebase Admin] FATAL: No credentials configured for production. " +
-      "Set FIREBASE_SERVICE_ACCOUNT_JSON or GOOGLE_APPLICATION_CREDENTIALS."
-    );
-  }
+  // No credentials — warn and use fallback (prevents Next.js compile/build time crashes)
+  console.warn(
+    "[Firebase Admin] ⚠ WARNING: No credentials configured. Using project ID only. " +
+    "If this is production, please set FIREBASE_SERVICE_ACCOUNT_JSON or GOOGLE_APPLICATION_CREDENTIALS in your environment."
+  );
 
   // Dev fallback: Initialize without credentials (requires open Firestore rules)
   console.warn(
