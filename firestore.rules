@@ -9,7 +9,7 @@ service cloud.firestore {
     match /stations/{stationId} {
       allow read: if true;
       allow write: if request.auth != null
-                   && request.auth.token.email in ['patelpalash57work@gmail.com'];
+                   && request.auth.token.email in ['patelpalash57work@gmail.com', 'officialpatel14@gmail.com'];
     }
 
     // Bookings: Users can read their own, create their own, admins can update any
@@ -19,7 +19,7 @@ service cloud.firestore {
                     && request.resource.data.userId == request.auth.uid;
       allow update: if request.auth != null
                     && (resource.data.userId == request.auth.uid
-                        || request.auth.token.email in ['patelpalash57work@gmail.com']);
+                        || request.auth.token.email in ['patelpalash57work@gmail.com', 'officialpatel14@gmail.com']);
     }
 
     // Users: Users can read/write their own doc only
@@ -32,7 +32,23 @@ service cloud.firestore {
     match /tournaments/{tournamentId} {
       allow read: if true;
       allow write: if request.auth != null
-                   && request.auth.token.email in ['patelpalash57work@gmail.com'];
+                   && request.auth.token.email in ['patelpalash57work@gmail.com', 'officialpatel14@gmail.com'];
+    }
+
+    // Expenses, Inventory, Inventory Sales: Only admins can read/write
+    match /expenses/{expenseId} {
+      allow read, write: if request.auth != null
+                         && request.auth.token.email in ['patelpalash57work@gmail.com', 'officialpatel14@gmail.com'];
+    }
+
+    match /inventory/{itemId} {
+      allow read, write: if request.auth != null
+                         && request.auth.token.email in ['patelpalash57work@gmail.com', 'officialpatel14@gmail.com'];
+    }
+
+    match /inventory_sales/{saleId} {
+      allow read, write: if request.auth != null
+                         && request.auth.token.email in ['patelpalash57work@gmail.com', 'officialpatel14@gmail.com'];
     }
 
     // Default deny for all other collections

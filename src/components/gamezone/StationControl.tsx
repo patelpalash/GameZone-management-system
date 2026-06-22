@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { collection, onSnapshot, doc, updateDoc, writeBatch, deleteDoc, query, where, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Station, Game, Booking } from "@/types";
@@ -127,11 +127,22 @@ export default function StationControl() {
     return () => unsubscribe();
   }, []);
 
+  const activeBookingsRef = useRef<Booking[]>([]);
+  const confirmedBookingsRef = useRef<Booking[]>([]);
+
+  useEffect(() => {
+    activeBookingsRef.current = activeBookings;
+  }, [activeBookings]);
+
+  useEffect(() => {
+    confirmedBookingsRef.current = confirmedBookings;
+  }, [confirmedBookings]);
+
   // Client-side auto-expiry of active sessions
   useEffect(() => {
     const interval = setInterval(() => {
       const now = new Date();
-      activeBookings.forEach(async (booking) => {
+      activeBookingsRef.current.forEach(async (booking) => {
         if (booking.endTime) {
           const endTimeDate = booking.endTime.toDate();
           if (endTimeDate <= now) {
@@ -165,13 +176,13 @@ export default function StationControl() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [activeBookings]);
+  }, []);
 
   // Client-side auto-activation of confirmed pre-booked sessions
   useEffect(() => {
     const interval = setInterval(() => {
       const now = new Date();
-      confirmedBookings.forEach(async (booking) => {
+      confirmedBookingsRef.current.forEach(async (booking) => {
         if (booking.scheduledStartTime && booking.scheduledEndTime) {
           const startTimeDate = booking.scheduledStartTime.toDate();
           if (startTimeDate <= now) {
@@ -214,7 +225,7 @@ export default function StationControl() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [confirmedBookings]);
+  }, []);
 
   const handleActivatePrebook = async (booking: Booking) => {
     try {

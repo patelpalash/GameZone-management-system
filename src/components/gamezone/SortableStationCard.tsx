@@ -147,66 +147,74 @@ export default function SortableStationCard({
         </div>
       )}
 
-      <div className="flex gap-2 mt-4">
-        <button 
-          className="flex-1 py-2 text-xs font-black tracking-widest uppercase bg-pink-500/20 border border-pink-500/50 text-pink-400 hover:bg-pink-500/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1"
-          disabled={station.status !== 'occupied'}
-          onClick={(e) => { e.stopPropagation(); onEndSession(station); }}
-        >
-          <PowerOff className="w-3 h-3" /> END
-        </button>
-        <button 
-          className="flex-1 py-2 text-xs font-bold tracking-widest uppercase border border-slate-600 text-slate-400 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1"
-          disabled={station.status === 'occupied'}
-          onClick={(e) => { e.stopPropagation(); onToggleMaintenance(station); }}
-        >
-          <Wrench className="w-3 h-3" /> 
-          {station.status === 'maintenance' ? 'FIXED' : 'MAINT'}
-        </button>
-        {onAssignWalkIn && station.status === 'available' && (
+      <div className="flex flex-col gap-2 mt-4">
+        {/* Primary Actions Row */}
+        <div className="flex gap-2">
           <button 
-            className="flex-1 py-2 text-xs font-bold tracking-widest uppercase bg-yellow-950/20 border border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/20 transition-colors flex items-center justify-center gap-1"
-            onClick={(e) => { e.stopPropagation(); onAssignWalkIn(station); }}
+            className="flex-1 py-2 text-xs font-black tracking-widest uppercase bg-pink-500/20 border border-pink-500/50 text-pink-400 hover:bg-pink-500/30 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1"
+            disabled={station.status !== 'occupied'}
+            onClick={(e) => { e.stopPropagation(); onEndSession(station); }}
           >
-            ASSIGN
+            <PowerOff className="w-3 h-3" /> END
           </button>
-        )}
-        {/* Booking History Button */}
-        {onViewHistory && (
           <button 
-            className="px-3 py-2 text-xs font-bold bg-yellow-950/20 border border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/20 transition-colors flex items-center justify-center"
-            onClick={(e) => { e.stopPropagation(); onViewHistory(station); }}
-            title="VIEW BOOKING HISTORY"
-          >
-            <Receipt className="w-3.5 h-3.5" />
-          </button>
-        )}
-        <button 
-          onClick={(e) => { e.stopPropagation(); router.push(`/admin/stations/${station.id}`); }}
-          className="px-3 py-2 text-xs font-bold bg-indigo-950/20 border border-indigo-500/50 text-indigo-400 hover:bg-indigo-500/20 transition-colors flex items-center justify-center"
-          title="VIEW TIMELINE"
-        >
-          <Activity className="w-3.5 h-3.5" />
-        </button>
-        {onEditStation && (
-          <button 
-            className="px-3 py-2 text-xs font-bold bg-cyan-950/20 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/20 transition-colors flex items-center justify-center"
-            onClick={(e) => { e.stopPropagation(); onEditStation(station); }}
-            title="EDIT NODE"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
-        )}
-        {onDeleteStation && (
-          <button 
-            className="px-3 py-2 text-xs font-bold bg-red-950/20 border border-red-500/50 text-red-500 hover:bg-red-500/20 disabled:opacity-30 transition-colors flex items-center justify-center"
+            className="flex-1 py-2 text-xs font-bold tracking-widest uppercase border border-slate-600 text-slate-400 hover:bg-slate-800 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1"
             disabled={station.status === 'occupied'}
-            onClick={(e) => { e.stopPropagation(); onDeleteStation(station); }}
-            title="DELETE NODE"
+            onClick={(e) => { e.stopPropagation(); onToggleMaintenance(station); }}
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Wrench className="w-3 h-3" /> 
+            {station.status === 'maintenance' ? 'FIXED' : 'MAINT'}
           </button>
-        )}
+          {onAssignWalkIn && (
+            <button 
+              className="flex-1 py-2 text-xs font-bold tracking-widest uppercase bg-yellow-950/20 border border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/20 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1"
+              disabled={station.status !== 'available'}
+              onClick={(e) => { e.stopPropagation(); onAssignWalkIn(station); }}
+            >
+              ASSIGN
+            </button>
+          )}
+        </div>
+
+        {/* Secondary Icon Actions Row */}
+        <div className="flex gap-2 justify-end">
+          {/* Booking History Button */}
+          {onViewHistory && (
+            <button 
+              className="flex-1 py-2 text-xs font-bold bg-yellow-950/20 border border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/20 disabled:opacity-50 disabled:grayscale transition-colors flex items-center justify-center"
+              onClick={(e) => { e.stopPropagation(); onViewHistory(station); }}
+              title="VIEW BOOKING HISTORY"
+            >
+              <Receipt className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <button 
+            onClick={(e) => { e.stopPropagation(); router.push(`/admin/stations/${station.id}`); }}
+            className="flex-1 py-2 text-xs font-bold bg-indigo-950/20 border border-indigo-500/50 text-indigo-400 hover:bg-indigo-500/20 disabled:opacity-50 disabled:grayscale transition-colors flex items-center justify-center"
+            title="VIEW TIMELINE"
+          >
+            <Activity className="w-3.5 h-3.5" />
+          </button>
+          {onEditStation && (
+            <button 
+              className="flex-1 py-2 text-xs font-bold bg-cyan-950/20 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/20 disabled:opacity-50 disabled:grayscale transition-colors flex items-center justify-center"
+              onClick={(e) => { e.stopPropagation(); onEditStation(station); }}
+              title="EDIT NODE"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {onDeleteStation && (
+            <button 
+              className="flex-1 py-2 text-xs font-bold bg-red-950/20 border border-red-500/50 text-red-500 hover:bg-red-500/20 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+              disabled={station.status === 'occupied'}
+              onClick={(e) => { e.stopPropagation(); onDeleteStation(station); }}
+              title="DELETE NODE"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

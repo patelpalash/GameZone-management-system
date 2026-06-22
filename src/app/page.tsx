@@ -33,14 +33,14 @@ export default function LandingPage() {
             {!loading && user ? (
               <NextLink 
                 href="/dashboard"
-                className="bg-cyan-500 text-black px-4 md:px-6 py-2 font-black tracking-widest uppercase cyber-cut glow-cyan hover-glitch transition-all active:scale-95 text-sm"
+                className="bg-cyan-500 text-black px-4 md:px-6 py-2 font-black tracking-widest uppercase cyber-cut glow-cyan transition-all active:scale-95 text-sm"
               >
                 SYS_DASHBOARD
               </NextLink>
             ) : (
               <NextLink 
                 href="/login"
-                className="bg-yellow-400 text-black px-4 md:px-6 py-2 font-black tracking-widest uppercase cyber-cut glow-yellow hover-glitch transition-all active:scale-95 text-sm"
+                className="bg-yellow-400 text-black px-4 md:px-6 py-2 font-black tracking-widest uppercase cyber-cut glow-yellow transition-all active:scale-95 text-sm"
               >
                 SYS_LOGIN
               </NextLink>

@@ -118,13 +118,10 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
     }
     const end = new Date(start.getTime() + selectedDuration * 60000);
 
-    if (isPrebook && start.getTime() < Date.now()) {
-      return "START_TIME_MUST_BE_IN_FUTURE";
-    }
-
     for (const b of stationBookings) {
       if (b.status === "pending_payment" && b.createdAt) {
-        const ageInMs = Date.now() - b.createdAt.toMillis();
+        const createdAtMs = typeof b.createdAt.toMillis === 'function' ? b.createdAt.toMillis() : new Date(b.createdAt as unknown as string).getTime();
+        const ageInMs = Date.now() - createdAtMs;
         const fifteenMinutes = 15 * 60 * 1000;
         if (ageInMs > fifteenMinutes) {
           continue;
@@ -134,12 +131,15 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
       let bStart: Date;
       let bEnd: Date;
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const safeToDate = (ts: any) => typeof ts.toDate === 'function' ? ts.toDate() : new Date(ts);
+      
       if (b.scheduledStartTime && b.scheduledEndTime) {
-        bStart = b.scheduledStartTime.toDate();
-        bEnd = b.scheduledEndTime.toDate();
+        bStart = safeToDate(b.scheduledStartTime);
+        bEnd = safeToDate(b.scheduledEndTime);
       } else if (b.startTime && b.endTime) {
-        bStart = b.startTime.toDate();
-        bEnd = b.endTime.toDate();
+        bStart = safeToDate(b.startTime);
+        bEnd = safeToDate(b.endTime);
       } else {
         continue; // Skip bookings that don't have timings
       }
@@ -252,12 +252,15 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
       let bStart: Date;
       let bEnd: Date;
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const safeToDate = (ts: any) => typeof ts.toDate === 'function' ? ts.toDate() : new Date(ts);
+
       if (b.scheduledStartTime && b.scheduledEndTime) {
-        bStart = b.scheduledStartTime.toDate();
-        bEnd = b.scheduledEndTime.toDate();
+        bStart = safeToDate(b.scheduledStartTime);
+        bEnd = safeToDate(b.scheduledEndTime);
       } else if (b.startTime && b.endTime) {
-        bStart = b.startTime.toDate();
-        bEnd = b.endTime.toDate();
+        bStart = safeToDate(b.startTime);
+        bEnd = safeToDate(b.endTime);
       } else {
         continue;
       }
@@ -281,6 +284,19 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
   const handleProceedPayment = async () => {
     if (conflictError) return;
     if (isPrebook && (!prebookDate || !prebookTime)) return;
+    
+    if (isPrebook && prebookDate) {
+      const timeParts = prebookTime.split(":");
+      if (timeParts.length >= 2) {
+        const start = new Date(prebookDate);
+        start.setHours(Number(timeParts[0]), Number(timeParts[1]), 0, 0);
+        if (start.getTime() < Date.now()) {
+          setError("START_TIME_MUST_BE_IN_FUTURE");
+          return;
+        }
+      }
+    }
+
     if (!user) {
       console.error("User session not found");
       return;

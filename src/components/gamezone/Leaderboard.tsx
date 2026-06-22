@@ -13,17 +13,6 @@ interface LeaderboardPlayer {
   badge: "LEGENDARY" | "DIAMOND" | "PLATINUM" | "GOLD" | "SILVER";
 }
 
-const STATIC_FALLBACKS = [
-  { name: "PHANTOM_X", hours: 342 },
-  { name: "N3ON_BLITZ", hours: 289 },
-  { name: "CYB3R_WOLF", hours: 256 },
-  { name: "SHADOW_OPS", hours: 198 },
-  { name: "GLiTCH_404", hours: 175 },
-  { name: "VORT3X_", hours: 143 },
-  { name: "NULL_PTR", hours: 128 },
-  { name: "BYTE_RUSH", hours: 102 },
-];
-
 const getRankIcon = (rank: number) => {
   if (rank === 1) return <Crown className="w-5 h-5 text-yellow-400" />;
   if (rank === 2) return <Medal className="w-5 h-5 text-slate-300" />;
@@ -65,66 +54,38 @@ export default function Leaderboard() {
 
       snapshot.forEach((docSnap) => {
         const b = docSnap.data() as Booking;
-        if (!b.userId) return;
         
-        const current = userPlaytime[b.userId] || {
-          name: b.userName || "PLAYER_" + b.userId.substring(0, 4).toUpperCase(),
+        const name = b.userName || (b.userId ? "PLAYER_" + b.userId.substring(0, 4).toUpperCase() : "UNKNOWN");
+        const lowerName = name.toLowerCase().trim();
+        
+        // Skip generic unnamed walk-ins to prevent them from aggregating into a massive fake player
+        if (lowerName.includes("walk-in") || lowerName.includes("walk in") || lowerName.includes("unknown")) return;
+        
+        const key = b.userId || lowerName; // Group by userId if online, otherwise group by name
+
+        const current = userPlaytime[key] || {
+          name: name,
           minutes: 0
         };
         current.minutes += b.durationMinutes || 0;
-        userPlaytime[b.userId] = current;
+        userPlaytime[key] = current;
       });
 
-      // Map to list
-      const aggregatedList = Object.values(userPlaytime).map((data) => {
-        const hours = Math.round((data.minutes / 60) * 10) / 10;
-        return {
-          name: data.name,
-          hours
-        };
-      });
+      // Map to ranked list – top 10 only
+      const ranked: LeaderboardPlayer[] = Object.values(userPlaytime)
+        .map((data) => {
+          const hours = Math.round((data.minutes / 60) * 10) / 10;
+          return {
+            name: data.name,
+            hours,
+            badge: getBadgeLabel(hours),
+          };
+        })
+        .sort((a, b) => b.hours - a.hours)
+        .slice(0, 10)
+        .map((p, idx) => ({ ...p, rank: idx + 1 }));
 
-      // Sort by hours played descending
-      aggregatedList.sort((a, b) => b.hours - a.hours);
-
-      // Merge with static fallbacks if we have less than 8 entries to keep look-and-feel
-      const finalPlayers: LeaderboardPlayer[] = [];
-      const usedNames = new Set(aggregatedList.map(p => p.name.toUpperCase()));
-
-      // Put real players first
-      aggregatedList.forEach((player, idx) => {
-        finalPlayers.push({
-          rank: idx + 1,
-          name: player.name,
-          hours: player.hours,
-          badge: getBadgeLabel(player.hours)
-        });
-      });
-
-      // Fill remaining slots with static players who don't duplicate real players
-      let fallbackIndex = 0;
-      while (finalPlayers.length < 8 && fallbackIndex < STATIC_FALLBACKS.length) {
-        const fallback = STATIC_FALLBACKS[fallbackIndex++];
-        if (!usedNames.has(fallback.name.toUpperCase())) {
-          finalPlayers.push({
-            rank: finalPlayers.length + 1,
-            name: fallback.name,
-            hours: fallback.hours,
-            badge: getBadgeLabel(fallback.hours)
-          });
-        }
-      }
-
-      // Re-sort final list to ensure fallbacks are placed correctly in the rank
-      finalPlayers.sort((a, b) => b.hours - a.hours);
-      
-      // Update ranks based on new sorted positions
-      const reranked = finalPlayers.map((p, idx) => ({
-        ...p,
-        rank: idx + 1
-      }));
-
-      setPlayers(reranked);
+      setPlayers(ranked);
       setLoading(false);
     }, (error) => {
       console.error("Leaderboard listener error:", error);
@@ -145,33 +106,42 @@ export default function Leaderboard() {
       </div>
       
       <div className="divide-y divide-slate-800/50">
-        {players.map((player) => (
-          <div 
-            key={`${player.rank}-${player.name}`} 
-            className={`flex items-center gap-4 px-4 py-3 hover:bg-yellow-400/5 transition-colors ${
-              player.rank <= 3 ? "bg-yellow-400/[0.02]" : ""
-            }`}
-          >
-            <div className="w-8 flex justify-center shrink-0">
-              {getRankIcon(player.rank)}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className={`font-black tracking-widest uppercase text-sm truncate ${
-                player.rank === 1 ? "text-yellow-400 text-neon-yellow font-mono" : "text-white font-mono"
-              }`}>
-                {player.name}
-              </p>
-            </div>
-            <div className="text-right shrink-0">
-              <p className="text-xs font-mono text-slate-400">{player.hours}h</p>
-            </div>
-            <div className={`px-2 py-0.5 text-[9px] font-black tracking-widest uppercase border cyber-cut shrink-0 ${getBadgeColor(player.badge)}`}>
-              {player.badge}
-            </div>
+        {!loading && players.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 px-6 gap-3">
+            <Trophy className="w-10 h-10 text-yellow-400/20" />
+            <p className="text-sm font-black tracking-widest uppercase text-slate-500 font-mono text-center leading-relaxed">
+              NO_PLAYERS_RANKED_YET<br />
+              <span className="text-yellow-400/40 text-xs">{"// PLAY_TO_CLAIM_YOUR_SPOT"}</span>
+            </p>
           </div>
-        ))}
+        ) : (
+          players.map((player) => (
+            <div 
+              key={`${player.rank}-${player.name}`} 
+              className={`flex items-center gap-4 px-4 py-3 hover:bg-yellow-400/5 transition-colors ${
+                player.rank <= 3 ? "bg-yellow-400/[0.02]" : ""
+              }`}
+            >
+              <div className="w-8 flex justify-center shrink-0">
+                {getRankIcon(player.rank)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`font-black tracking-widest uppercase text-sm truncate ${
+                  player.rank === 1 ? "text-yellow-400 text-neon-yellow font-mono" : "text-white font-mono"
+                }`}>
+                  {player.name}
+                </p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-xs font-mono text-slate-400">{player.hours}h</p>
+              </div>
+              <div className={`px-2 py-0.5 text-[9px] font-black tracking-widest uppercase border cyber-cut shrink-0 ${getBadgeColor(player.badge)}`}>
+                {player.badge}
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
 }
-

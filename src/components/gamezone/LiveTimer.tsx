@@ -11,10 +11,12 @@ export default function LiveTimer({ endTime }: LiveTimerProps) {
   const [timeLeft, setTimeLeft] = useState("");
   const [isExpiring, setIsExpiring] = useState(false);
 
+  const endTimeMs = endTime.getTime();
+
   useEffect(() => {
     const calculateTimeLeft = () => {
       const now = new Date();
-      const difference = endTime.getTime() - now.getTime();
+      const difference = endTimeMs - now.getTime();
 
       if (difference <= 0) {
         setTimeLeft("00:00:00");
@@ -43,7 +45,7 @@ export default function LiveTimer({ endTime }: LiveTimerProps) {
     const timer = setInterval(calculateTimeLeft, 1000);
 
     return () => clearInterval(timer);
-  }, [endTime]);
+  }, [endTimeMs]);
 
   return (
     <motion.div

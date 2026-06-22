@@ -29,8 +29,8 @@ export default function AdminPaymentHistory() {
       
       // Sort by createdAt descending
       data.sort((a, b) => {
-        const timeA = a.createdAt?.toDate?.()?.getTime() || (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0);
-        const timeB = b.createdAt?.toDate?.()?.getTime() || (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0);
+        const timeA = typeof a.createdAt?.toDate === 'function' ? a.createdAt.toDate().getTime() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt as unknown as string).getTime() : 0));
+        const timeB = typeof b.createdAt?.toDate === 'function' ? b.createdAt.toDate().getTime() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt as unknown as string).getTime() : 0));
         return timeB - timeA;
       });
       

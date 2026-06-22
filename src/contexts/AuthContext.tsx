@@ -27,6 +27,7 @@ export function useAuth() {
 // Define admin emails here. Only these users can access /admin.
 export const ADMIN_EMAILS: string[] = [
   "patelpalash57work@gmail.com",
+  "officialpatel14@gmail.com",
 ];
 
 export function AuthProvider({ children }: { children: ReactNode }) {

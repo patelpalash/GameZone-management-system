@@ -215,17 +215,17 @@ export default function VerificationQueue() {
                     </div>
                     
                     <p className="text-sm text-slate-400 truncate">
-                      {booking.userName || "Unknown User"} <span className="text-slate-600">//</span> TXN: <span className="font-mono text-yellow-400 text-xs">{booking.transactionId}</span>
+                      {booking.userName || "Unknown User"} <span className="text-slate-600">{"//"}</span> TXN: <span className="font-mono text-yellow-400 text-xs">{booking.transactionId}</span>
                     </p>
                     
                     {booking.isPrebook && booking.scheduledStartTime && (
                       <p className="text-[10px] text-pink-400 font-mono tracking-widest uppercase mt-1">
-                        PREBOOK: {booking.scheduledStartTime.toDate().toLocaleDateString([], { month: 'short', day: 'numeric' })} @ {booking.scheduledStartTime.toDate().toLocaleTimeString("en-US", { hour: '2-digit', minute: '2-digit', hour12: true })}
+                        PREBOOK: {(typeof booking.scheduledStartTime.toDate === 'function' ? booking.scheduledStartTime.toDate() : new Date(booking.scheduledStartTime as unknown as string)).toLocaleDateString([], { month: 'short', day: 'numeric' })} @ {(typeof booking.scheduledStartTime.toDate === 'function' ? booking.scheduledStartTime.toDate() : new Date(booking.scheduledStartTime as unknown as string)).toLocaleTimeString("en-US", { hour: '2-digit', minute: '2-digit', hour12: true })}
                       </p>
                     )}
                     <p className="text-xs text-slate-500 font-mono flex items-center justify-between mt-2 pt-2 border-t border-slate-800">
                       <span>{booking.durationMinutes}min &bull; ₹{booking.totalCost}</span>
-                      <span>{booking.createdAt?.toDate().toLocaleTimeString("en-US", { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
+                      <span>{booking.createdAt ? (typeof booking.createdAt.toDate === 'function' ? booking.createdAt.toDate() : new Date(booking.createdAt as unknown as string)).toLocaleTimeString("en-US", { hour: '2-digit', minute: '2-digit', hour12: true }) : ''}</span>
                     </p>
                   </div>
                   
