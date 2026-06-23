@@ -63,7 +63,9 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
   // Auto-populate date on prebook activate
   useEffect(() => {
     if (isPrebook && !prebookDate) {
-      setPrebookDate(new Date());
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      setPrebookDate(today);
     }
   }, [isPrebook, prebookDate]);
 
@@ -217,10 +219,10 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
     const prebookStr = format(prebookDate, "yyyy-MM-dd");
     return stationBookings.filter(b => {
       let bDate: Date;
-      if (b.scheduledStartTime) {
-        bDate = b.scheduledStartTime.toDate();
-      } else if (b.startTime) {
+      if (b.startTime) {
         bDate = b.startTime.toDate();
+      } else if (b.scheduledStartTime) {
+        bDate = b.scheduledStartTime.toDate();
       } else {
         return false;
       }
@@ -255,12 +257,12 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const safeToDate = (ts: any) => typeof ts.toDate === 'function' ? ts.toDate() : new Date(ts);
 
-      if (b.scheduledStartTime && b.scheduledEndTime) {
-        bStart = safeToDate(b.scheduledStartTime);
-        bEnd = safeToDate(b.scheduledEndTime);
-      } else if (b.startTime && b.endTime) {
+      if (b.startTime && b.endTime) {
         bStart = safeToDate(b.startTime);
         bEnd = safeToDate(b.endTime);
+      } else if (b.scheduledStartTime && b.scheduledEndTime) {
+        bStart = safeToDate(b.scheduledStartTime);
+        bEnd = safeToDate(b.scheduledEndTime);
       } else {
         continue;
       }
@@ -397,7 +399,7 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
                 <label className="text-[10px] text-cyan-400 uppercase tracking-[0.2em] font-bold flex items-center gap-1 mb-2">
                   <CalendarIcon className="w-3.5 h-3.5" /> Select Date
                 </label>
-                <div className="flex justify-center p-2 bg-black border border-cyan-500/50 shadow-[0_0_15px_rgba(0,240,255,0.1)]">
+                <div className="flex justify-center p-2 bg-black border border-cyan-500/50 shadow-[0_0_15px_rgba(0,240,255,0.1)] w-full overflow-x-auto">
                   <style>
                     {`
                       .rdp {
@@ -407,6 +409,11 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
                         color: #cbd5e1;
                         font-family: monospace;
                         margin: 0;
+                      }
+                      @media (max-width: 400px) {
+                        .rdp {
+                          --rdp-cell-size: 28px;
+                        }
                       }
                       .rdp-day_selected, .rdp-day_selected:focus-visible, .rdp-day_selected:hover {
                         background-color: var(--rdp-accent-color);
@@ -435,9 +442,13 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
                     mode="single"
                     selected={prebookDate}
                     onSelect={(date) => {
-                      if (date) setPrebookDate(date);
+                      if (date) {
+                        const d = new Date(date);
+                        d.setHours(0, 0, 0, 0);
+                        setPrebookDate(d);
+                      }
                     }}
-                    disabled={{ before: new Date() }}
+                    disabled={{ before: new Date(new Date().setHours(0,0,0,0)) }}
                   />
                 </div>
               </div>

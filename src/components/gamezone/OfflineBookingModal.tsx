@@ -70,12 +70,12 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const safeToDate = (ts: any) => typeof ts.toDate === 'function' ? ts.toDate() : new Date(ts);
 
-      if (b.scheduledStartTime && b.scheduledEndTime) {
-        bStart = safeToDate(b.scheduledStartTime);
-        bEnd = safeToDate(b.scheduledEndTime);
-      } else if (b.startTime && b.endTime) {
+      if (b.startTime && b.endTime) {
         bStart = safeToDate(b.startTime);
         bEnd = safeToDate(b.endTime);
+      } else if (b.scheduledStartTime && b.scheduledEndTime) {
+        bStart = safeToDate(b.scheduledStartTime);
+        bEnd = safeToDate(b.scheduledEndTime);
       } else {
         continue;
       }
