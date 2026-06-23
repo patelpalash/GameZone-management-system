@@ -389,7 +389,7 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
           <span className="text-xs font-mono font-bold tracking-widest">AWAITING_FUNDS</span>
         </div>
 
-        <div className="p-6 space-y-6 bg-black/90 relative z-10 overflow-y-auto">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 bg-black/90 relative z-10 overflow-y-auto">
           
           {/* Prebook Date/Time Selectors */}
           {isPrebook && (
@@ -399,20 +399,32 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
                 <label className="text-[10px] text-cyan-400 uppercase tracking-[0.2em] font-bold flex items-center gap-1 mb-2">
                   <CalendarIcon className="w-3.5 h-3.5" /> Select Date
                 </label>
-                <div className="flex justify-center p-2 bg-black border border-cyan-500/50 shadow-[0_0_15px_rgba(0,240,255,0.1)] w-full overflow-x-auto">
+                <div className="flex justify-center p-2 sm:p-4 bg-black border border-cyan-500/50 shadow-[0_0_15px_rgba(0,240,255,0.1)] w-full">
                   <style>
                     {`
                       .rdp {
-                        --rdp-cell-size: 35px;
+                        --rdp-cell-size: 38px;
                         --rdp-accent-color: #06b6d4;
                         --rdp-background-color: rgba(6, 182, 212, 0.2);
                         color: #cbd5e1;
                         font-family: monospace;
                         margin: 0;
+                        font-size: 14px;
                       }
-                      @media (max-width: 400px) {
+                      /* Hide the default react-day-picker margin */
+                      .rdp-month { margin: 0; width: 100%; }
+                      .rdp-table { width: 100%; max-width: 100%; }
+                      
+                      @media (max-width: 480px) {
+                        .rdp {
+                          --rdp-cell-size: 32px;
+                          font-size: 12px;
+                        }
+                      }
+                      @media (max-width: 380px) {
                         .rdp {
                           --rdp-cell-size: 28px;
+                          font-size: 11px;
                         }
                       }
                       .rdp-day_selected, .rdp-day_selected:focus-visible, .rdp-day_selected:hover {
