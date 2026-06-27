@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Station, Booking } from "@/types";
-import { Loader2, AlertTriangle, User, UserPlus } from "lucide-react";
+import { Loader2, AlertTriangle, User, UserPlus, Phone, Calendar as CalendarIcon, Clock } from "lucide-react";
 import { writeBatch, doc, Timestamp, collection } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
-import { areIntervalsOverlapping } from "date-fns";
+import { DayPicker } from "react-day-picker";
+import "react-day-picker/dist/style.css";
+import { areIntervalsOverlapping, format } from "date-fns";
 
 interface OfflineBookingModalProps {
   station: Station | null;
@@ -35,29 +37,106 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
   const [selectedDuration, setSelectedDuration] = useState<number>(60);
   const [paymentMode, setPaymentMode] = useState<"Cash" | "Online">("Cash");
   const [guestName, setGuestName] = useState("Walk-in Guest");
+  const [phone, setPhone] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Scheduling states
+  const [isPrebook, setIsPrebook] = useState(false);
+  const [prebookDate, setPrebookDate] = useState<Date | undefined>(new Date(new Date().setHours(0, 0, 0, 0)));
+  const [prebookTime, setPrebookTime] = useState("");
 
   useEffect(() => {
     if (!isOpen) {
       setSelectedDuration(60);
       setPaymentMode("Cash");
       setGuestName("Walk-in Guest");
+      setPhone("");
       setError(null);
+      setIsPrebook(false);
+      setPrebookDate(new Date(new Date().setHours(0, 0, 0, 0)));
+      setPrebookTime("");
     }
   }, [isOpen]);
+
+  // Generate dynamic half-hourly time slots matching user side logic
+  const timeSlots = useMemo(() => {
+    if (!prebookDate) return [];
+    const slots = [];
+    const todayStr = format(new Date(), "yyyy-MM-dd");
+    const prebookStr = format(prebookDate, "yyyy-MM-dd");
+    const isToday = prebookStr === todayStr;
+    
+    let startHour = 9; // System operations open at 9:00 AM
+    let startMinute = 0;
+    
+    if (isToday) {
+      const now = new Date();
+      const currentMin = now.getMinutes();
+      if (currentMin < 30) {
+        now.setMinutes(30, 0, 0);
+      } else {
+        now.setHours(now.getHours() + 1, 0, 0, 0);
+      }
+      // Buffer of 30 mins to allow payment / setup
+      const prepTime = new Date(now.getTime() + 30 * 60000);
+      startHour = prepTime.getHours();
+      startMinute = prepTime.getMinutes() === 0 ? 0 : 30;
+    }
+    
+    const endHour = 23; // System operations close at 11:59 PM
+    let currentHour = startHour;
+    let currentMin = startMinute;
+    
+    while (currentHour < endHour || (currentHour === endHour && currentMin <= 30)) {
+      const hh = String(currentHour).padStart(2, "0");
+      const mm = String(currentMin).padStart(2, "0");
+      const timeStr = `${hh}:${mm}`;
+      
+      const suffix = currentHour >= 12 ? "PM" : "AM";
+      const displayHour = currentHour % 12 === 0 ? 12 : currentHour % 12;
+      const displayLabel = `${String(displayHour).padStart(2, "0")}:${mm} ${suffix}`;
+      
+      slots.push({ value: timeStr, label: displayLabel });
+      
+      currentMin += 30;
+      if (currentMin >= 60) {
+        currentHour += 1;
+        currentMin = 0;
+      }
+    }
+    return slots;
+  }, [prebookDate]);
+
+  // Set first available time slot automatically
+  useEffect(() => {
+    if (isPrebook && timeSlots.length > 0 && !prebookTime) {
+      setPrebookTime(timeSlots[0].value);
+    }
+  }, [isPrebook, timeSlots, prebookTime]);
 
   if (!station) return null;
 
   const totalCost = (station.pricePerHour / 60) * selectedDuration;
   
   const conflictError = (() => {
-    const start = new Date();
+    let start: Date;
+    if (isPrebook && prebookDate && prebookTime) {
+      const timeParts = prebookTime.split(":");
+      if (timeParts.length < 2) return null;
+      start = new Date(prebookDate);
+      start.setHours(Number(timeParts[0]), Number(timeParts[1]), 0, 0);
+    } else {
+      start = new Date();
+    }
     const end = new Date(start.getTime() + selectedDuration * 60000);
 
     for (const b of stationBookings) {
       if (b.status === "pending_payment" && b.createdAt) {
-        const ageInMs = Date.now() - b.createdAt.toMillis();
+        const createdAtMs = typeof b.createdAt.toMillis === 'function' 
+          ? b.createdAt.toMillis() 
+          : new Date(b.createdAt as unknown as string).getTime();
+        const ageInMs = Date.now() - createdAtMs;
         const fifteenMinutes = 15 * 60 * 1000;
         if (ageInMs > fifteenMinutes) {
           continue;
@@ -95,7 +174,7 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
     }
     return null;
   })();
-  
+
   const handleAssignWalkIn = async () => {
     if (conflictError) return;
     if (!user) {
@@ -103,8 +182,18 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
       return;
     }
 
-    if (station.status !== "available") {
-      setError("This node is not available. It must be vacant to assign a walk-in.");
+    if (!isPrebook && station.status !== "available") {
+      setError("This node is not available. It must be vacant to assign a walk-in immediately.");
+      return;
+    }
+
+    if (!phone || phone.trim().length !== 10) {
+      setError("Customer phone number must be exactly 10 digits.");
+      return;
+    }
+
+    if (isPrebook && (!prebookDate || !prebookTime)) {
+      setError("Please select a date and time slot.");
       return;
     }
 
@@ -114,8 +203,15 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
       const batch = writeBatch(db);
       const newBookingRef = doc(collection(db, "bookings"));
       
-      const now = new Date();
-      const endTime = new Date(now.getTime() + selectedDuration * 60000);
+      let start: Date;
+      if (isPrebook) {
+        const timeParts = prebookTime.split(":");
+        start = new Date(prebookDate!);
+        start.setHours(Number(timeParts[0]), Number(timeParts[1]), 0, 0);
+      } else {
+        start = new Date();
+      }
+      const endTime = new Date(start.getTime() + selectedDuration * 60000);
 
       // Create standard booking record marked as offline/cash
       batch.set(newBookingRef, {
@@ -123,26 +219,29 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
         stationId: station.id,
         userId: user.uid, // The admin creating the booking
         userName: guestName.trim() || "Walk-in Guest",
+        userPhone: phone.trim(),
         durationMinutes: selectedDuration,
         totalCost: Number(totalCost.toFixed(2)),
-        status: "active",
+        status: isPrebook ? "confirmed" : "active",
         transactionId: paymentMode === "Cash" ? "OFFLINE_CASH" : "OFFLINE_ONLINE",
         paymentMethod: paymentMode,
-        startTime: Timestamp.fromDate(now),
-        endTime: Timestamp.fromDate(endTime),
-        isPrebook: false,
-        scheduledStartTime: null,
-        scheduledEndTime: null,
-        createdAt: Timestamp.fromDate(now),
-        updatedAt: Timestamp.fromDate(now),
+        startTime: isPrebook ? null : Timestamp.fromDate(start),
+        endTime: isPrebook ? null : Timestamp.fromDate(endTime),
+        isPrebook: isPrebook,
+        scheduledStartTime: isPrebook ? Timestamp.fromDate(start) : null,
+        scheduledEndTime: isPrebook ? Timestamp.fromDate(endTime) : null,
+        createdAt: Timestamp.fromDate(new Date()),
+        updatedAt: Timestamp.fromDate(new Date()),
       });
 
-      // Update station status to occupied
-      const stationRef = doc(db, "stations", station.id);
-      batch.update(stationRef, {
-        status: "occupied",
-        currentSessionId: newBookingRef.id,
-      });
+      // Update station status to occupied ONLY if starting now
+      if (!isPrebook) {
+        const stationRef = doc(db, "stations", station.id);
+        batch.update(stationRef, {
+          status: "occupied",
+          currentSessionId: newBookingRef.id,
+        });
+      }
 
       await batch.commit();
       onClose();
@@ -161,7 +260,7 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
         onClose();
       }
     }}>
-      <DialogContent className="sm:max-w-xl bg-black border-2 border-yellow-500 shadow-[0_0_30px_rgba(252,238,10,0.2)] p-0 gap-0 cyber-cut overflow-hidden max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-xl bg-black border-2 border-yellow-500 shadow-[0_0_30px_rgba(252,238,10,0.2)] p-0 gap-0 cyber-cut overflow-hidden max-h-[95vh] sm:max-h-[90vh] flex flex-col">
         
         {/* Header */}
         <div className="bg-yellow-400 text-black p-4 flex items-center justify-between shrink-0">
@@ -187,6 +286,133 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
               className="w-full bg-slate-900 border border-slate-700 text-white p-3 font-mono text-sm focus:border-yellow-500 focus:outline-none placeholder:text-slate-600 transition-colors"
             />
           </div>
+
+          {/* Customer Phone Input */}
+          <div className="space-y-2">
+            <label className="text-xs text-yellow-500 uppercase tracking-[0.2em] font-bold flex items-center gap-2">
+              <Phone className="w-4 h-4" /> Customer Phone Number (Mandatory)
+            </label>
+            <input
+              type="tel"
+              required
+              pattern="[0-9]{10}"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, '').slice(0, 10))}
+              placeholder="10-digit mobile number"
+              className="w-full bg-slate-900 border border-slate-700 text-white p-3 font-mono text-sm focus:border-yellow-500 focus:outline-none placeholder:text-slate-600 transition-colors"
+            />
+          </div>
+
+          {/* Assign Mode Toggles */}
+          <div className="space-y-2">
+            <p className="text-xs text-yellow-500 uppercase tracking-[0.2em] font-bold">ASSIGN_MODE</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setIsPrebook(false)}
+                className={`flex-1 py-3 text-sm font-black tracking-widest cyber-cut uppercase transition-colors border ${
+                  !isPrebook 
+                    ? "bg-yellow-500/20 text-yellow-400 border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.2)]" 
+                    : "bg-slate-900 border-slate-700 text-slate-500 hover:text-yellow-400 hover:border-yellow-400/50"
+                }`}
+              >
+                ASSIGN NOW
+              </button>
+              <button
+                onClick={() => setIsPrebook(true)}
+                className={`flex-1 py-3 text-sm font-black tracking-widest cyber-cut uppercase transition-colors border ${
+                  isPrebook 
+                    ? "bg-yellow-500/20 text-yellow-400 border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.2)]" 
+                    : "bg-slate-900 border-slate-700 text-slate-500 hover:text-yellow-400 hover:border-yellow-400/50"
+                }`}
+              >
+                SCHEDULE LATER
+              </button>
+            </div>
+          </div>
+
+          {/* Calendar scheduler for scheduling later */}
+          {isPrebook && (
+            <div className="space-y-4 p-4 border border-yellow-500/30 bg-yellow-950/10">
+              <div className="space-y-2">
+                <label className="text-[10px] text-yellow-400 uppercase tracking-[0.2em] font-bold flex items-center gap-1 mb-2">
+                  <CalendarIcon className="w-3.5 h-3.5" /> Select Date
+                </label>
+                <div className="flex justify-center p-2 sm:p-4 bg-black border border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.1)] w-full overflow-x-auto">
+                  <style>
+                    {`
+                      .rdp {
+                        --rdp-cell-size: 34px;
+                        --rdp-accent-color: #eab308;
+                        --rdp-background-color: rgba(234, 179, 8, 0.2);
+                        color: #cbd5e1;
+                        font-family: monospace;
+                        margin: 0;
+                        font-size: 13px;
+                      }
+                      .rdp-month { margin: 0; width: 100%; }
+                      .rdp-table { width: 100%; max-width: 100%; }
+                      .rdp-day_selected, .rdp-day_selected:focus-visible, .rdp-day_selected:hover {
+                        background-color: var(--rdp-accent-color);
+                        color: #000;
+                        font-weight: bold;
+                        border-radius: 0;
+                        box-shadow: 0 0 10px var(--rdp-accent-color);
+                      }
+                      .rdp-button:hover:not([disabled]):not(.rdp-day_selected) {
+                        background-color: var(--rdp-background-color);
+                        color: #eab308;
+                        border-radius: 0;
+                      }
+                      .rdp-day_today {
+                        color: #eab308;
+                        font-weight: bold;
+                        border: 1px solid #eab308;
+                        border-radius: 0;
+                      }
+                      .rdp-button {
+                        border-radius: 0;
+                      }
+                    `}
+                  </style>
+                  <DayPicker
+                    mode="single"
+                    selected={prebookDate}
+                    onSelect={(date) => {
+                      if (date) {
+                        const d = new Date(date);
+                        d.setHours(0, 0, 0, 0);
+                        setPrebookDate(d);
+                      }
+                    }}
+                    disabled={{ before: new Date(new Date().setHours(0,0,0,0)) }}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] text-yellow-400 uppercase tracking-[0.2em] font-bold flex items-center gap-1 mb-2">
+                  <Clock className="w-3.5 h-3.5" /> Select Time Slot
+                </label>
+                {timeSlots.length > 0 ? (
+                  <select
+                    value={prebookTime}
+                    onChange={(e) => setPrebookTime(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 text-white p-3 font-mono text-sm focus:border-yellow-500 focus:outline-none"
+                  >
+                    {timeSlots.map((slot) => (
+                      <option key={slot.value} value={slot.value}>
+                        {slot.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="p-3 bg-slate-900 border border-slate-700 text-slate-500 text-xs font-mono text-center">
+                    No time slots available for this date.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Duration Selector */}
           <div>
@@ -218,7 +444,7 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
                 className={`flex-1 py-3 text-sm font-black tracking-widest cyber-cut uppercase transition-colors border ${
                   paymentMode === "Cash" 
                     ? "bg-yellow-500/20 text-yellow-400 border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.2)]" 
-                    : "bg-slate-900 border-slate-700 text-slate-500 hover:text-yellow-400 hover:border-yellow-500/50"
+                    : "bg-slate-900 border-slate-700 text-slate-500 hover:text-yellow-400 hover:border-yellow-400/50"
                 }`}
               >
                 CASH
@@ -258,7 +484,7 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
             </div>
             <div className="text-right text-[10px] text-slate-400 font-mono space-y-1">
               <p>&gt; ASSIGN MODE: OFFLINE ({paymentMode.toUpperCase()})</p>
-              <p>&gt; STATUS: INSTANT AUTO-ACTIVATION</p>
+              <p>&gt; STATUS: {isPrebook ? "SCHEDULED (CONFIRMED)" : "INSTANT AUTO-ACTIVATION"}</p>
             </div>
           </div>
         </div>
@@ -272,12 +498,14 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
             ABORT
           </button>
           <button 
-            disabled={isSubmitting || !!conflictError} 
+            disabled={isSubmitting || !!conflictError || phone.trim().length !== 10 || (isPrebook && !prebookTime)} 
             onClick={handleAssignWalkIn}
             className="flex-1 py-4 font-black tracking-widest uppercase transition-colors disabled:bg-slate-800 disabled:text-slate-600 bg-yellow-400 hover:bg-yellow-300 text-black"
           >
             {isSubmitting ? (
               <span className="flex items-center justify-center animate-pulse"><Loader2 className="w-5 h-5 mr-2 animate-spin" /> PROVISIONING...</span>
+            ) : isPrebook ? (
+              "SCHEDULE OFFLINE SLOT"
             ) : (
               "ASSIGN & START NODE"
             )}

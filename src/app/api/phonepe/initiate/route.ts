@@ -62,6 +62,7 @@ export async function POST(request: Request) {
       scheduledStartTime,
       scheduledEndTime,
       userName,
+      userPhone,
     } = body;
 
     // Input validation
@@ -111,6 +112,7 @@ export async function POST(request: Request) {
       stationId,
       userId: verifiedUser.uid,
       userName: verifiedUser.name || userName || "Anonymous",
+      userPhone: userPhone || "",
       durationMinutes,
       totalCost: serverCalculatedCost,
       status: "pending_payment",

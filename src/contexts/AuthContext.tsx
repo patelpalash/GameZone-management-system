@@ -2,7 +2,8 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { User, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, setPersistence, browserLocalPersistence, updateProfile } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
+import { doc, setDoc } from "firebase/firestore";
 
 interface AuthContextType {
   user: User | null;
@@ -35,9 +36,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
       setLoading(false);
+      if (user) {
+        try {
+          const userDocRef = doc(db, "users", user.uid);
+          await setDoc(userDocRef, {
+            id: user.uid,
+            name: user.displayName || "Unknown User",
+            email: user.email || "",
+          }, { merge: true });
+        } catch (error) {
+          console.error("Error syncing user data to Firestore:", error);
+        }
+      }
     });
 
     return () => unsubscribe();

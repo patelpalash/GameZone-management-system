@@ -215,7 +215,9 @@ export default function VerificationQueue() {
                     </div>
                     
                     <p className="text-sm text-slate-400 truncate">
-                      {booking.userName || "Unknown User"} <span className="text-slate-600">{"//"}</span> TXN: <span className="font-mono text-yellow-400 text-xs">{booking.transactionId}</span>
+                      {booking.userName || "Unknown User"} 
+                      {booking.userPhone && <span className="text-xs text-slate-500 ml-2 font-mono">({booking.userPhone})</span>}
+                      <span className="text-slate-600 ml-2">{"//"}</span> TXN: <span className="font-mono text-yellow-400 text-xs">{booking.transactionId}</span>
                     </p>
                     
                     {booking.isPrebook && booking.scheduledStartTime && (

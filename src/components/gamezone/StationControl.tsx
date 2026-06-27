@@ -723,7 +723,7 @@ export default function StationControl() {
         station={offlineStation}
         isOpen={!!offlineStation}
         onClose={() => setOfflineStation(null)}
-        stationBookings={confirmedBookings.filter(b => b.stationId === offlineStation?.id)}
+        stationBookings={[...confirmedBookings, ...activeBookings].filter(b => b.stationId === offlineStation?.id)}
       />
     </DndContext>
   );

@@ -212,6 +212,11 @@ export default function StationDetailPage() {
         <div className="flex justify-between items-start mb-3">
           <div>
             <div className={`font-black tracking-wider uppercase ${textColor} text-lg`}>{b.userName || "WALK_IN_USER"}</div>
+            {b.userPhone && (
+              <div className="text-[10px] text-slate-500 font-mono tracking-widest uppercase mt-0.5">
+                PHONE: {b.userPhone}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {/* Payment Mode Badge */}

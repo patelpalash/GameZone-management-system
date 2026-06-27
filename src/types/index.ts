@@ -22,6 +22,7 @@ export interface Booking {
   stationId: string;
   userId: string;
   userName?: string;
+  userPhone?: string;
   durationMinutes: number;
   totalCost: number;
   status: "pending" | "pending_payment" | "confirmed" | "active" | "completed" | "failed";
@@ -38,6 +39,7 @@ export interface Booking {
 export interface User {
   id: string;
   name: string;
+  email?: string;
   phone: string;
   totalHoursPlayed: number;
 }

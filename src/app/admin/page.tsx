@@ -7,11 +7,12 @@ import AccountingDashboard from "@/components/gamezone/AccountingDashboard";
 import AdminTournamentsManager from "@/components/gamezone/AdminTournamentsManager";
 import AdminGuard from "@/components/gamezone/AdminGuard";
 import AdminPaymentHistory from "@/components/gamezone/AdminPaymentHistory";
-import { ShieldAlert, ArrowLeft, Terminal, DollarSign, Gamepad2, History } from "lucide-react";
+import AdminUsersManager from "@/components/gamezone/AdminUsersManager";
+import { ShieldAlert, ArrowLeft, Terminal, DollarSign, Gamepad2, History, Users } from "lucide-react";
 import NextLink from "next/link";
 
 export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState<"operations" | "finance" | "tournaments" | "payments">("operations");
+  const [activeTab, setActiveTab] = useState<"operations" | "finance" | "tournaments" | "payments" | "users">("operations");
 
   return (
     <AdminGuard>
@@ -60,6 +61,12 @@ export default function AdminDashboard() {
           >
             <History className="w-4 h-4" /> PAYMENT_HISTORY
           </button>
+          <button 
+            onClick={() => setActiveTab("users")}
+            className={`px-6 py-3 font-black tracking-widest uppercase text-sm cyber-cut transition-all flex items-center gap-2 ${activeTab === 'users' ? 'bg-blue-500 text-black shadow-[0_0_15px_rgba(59,130,246,0.5)]' : 'text-slate-400 border border-slate-800 hover:text-blue-500'}`}
+          >
+            <Users className="w-4 h-4" /> USERS_DATABASE
+          </button>
         </div>
 
         {/* Tab Content */}
@@ -89,6 +96,12 @@ export default function AdminDashboard() {
         {activeTab === "payments" && (
           <div className="min-h-[calc(100vh-240px)]">
             <AdminPaymentHistory />
+          </div>
+        )}
+
+        {activeTab === "users" && (
+          <div className="min-h-[calc(100vh-240px)]">
+            <AdminUsersManager />
           </div>
         )}
 

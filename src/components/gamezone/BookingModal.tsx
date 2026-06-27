@@ -3,8 +3,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Station, Booking } from "@/types";
-import { Loader2, TerminalSquare, Calendar as CalendarIcon, Clock, AlertTriangle } from "lucide-react";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { Loader2, TerminalSquare, Calendar as CalendarIcon, Clock, AlertTriangle, Phone } from "lucide-react";
+import { collection, query, where, onSnapshot, doc, getDoc, setDoc } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { DayPicker } from "react-day-picker";
@@ -60,6 +60,11 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
   // UI selection helper states
   const [customTimeActive, setCustomTimeActive] = useState(false);
 
+  // Phone states
+  const [profilePhone, setProfilePhone] = useState("");
+  const [inputPhone, setInputPhone] = useState("");
+  const [loadingProfilePhone, setLoadingProfilePhone] = useState(false);
+
   // Auto-populate date on prebook activate
   useEffect(() => {
     if (isPrebook && !prebookDate) {
@@ -78,8 +83,41 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
       setSelectedDuration(60);
       setError(null);
       setCustomTimeActive(false);
+      setProfilePhone("");
+      setInputPhone("");
+      setLoadingProfilePhone(false);
     }
   }, [isOpen]);
+
+  // Fetch user profile phone number
+  useEffect(() => {
+    if (!isOpen || !user) return;
+    const fetchPhone = async () => {
+      setLoadingProfilePhone(true);
+      if (user.phoneNumber) {
+        setProfilePhone(user.phoneNumber);
+        setInputPhone(user.phoneNumber.replace("+91", ""));
+        setLoadingProfilePhone(false);
+        return;
+      }
+      try {
+        const userDocRef = doc(db, "users", user.uid);
+        const userDoc = await getDoc(userDocRef);
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          if (data.phone) {
+            setProfilePhone(data.phone);
+            setInputPhone(data.phone.replace("+91", ""));
+          }
+        }
+      } catch (err) {
+        console.error("Error loading user profile phone:", err);
+      } finally {
+        setLoadingProfilePhone(false);
+      }
+    };
+    fetchPhone();
+  }, [isOpen, user]);
 
   // Fetch active, pending, or confirmed bookings for this station to check overlaps
   useEffect(() => {
@@ -323,9 +361,26 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
       endVal = new Date(startVal.getTime() + selectedDuration * 60000);
     }
 
+    const finalPhone = profilePhone || (inputPhone.trim() ? `+91${inputPhone.trim()}` : "");
+    if (!finalPhone || finalPhone.replace("+91", "").length !== 10) {
+      setError("A valid 10-digit phone number is required.");
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
     try {
+      if (!profilePhone) {
+        const userDocRef = doc(db, "users", user.uid);
+        await setDoc(userDocRef, {
+          id: user.uid,
+          name: user.displayName || "Unknown User",
+          phone: finalPhone,
+          totalHoursPlayed: 0
+        }, { merge: true });
+        setProfilePhone(finalPhone);
+      }
+
       const idToken = await auth.currentUser?.getIdToken(true);
       const response = await fetch("/api/phonepe/initiate", {
         method: "POST",
@@ -342,6 +397,7 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
           scheduledEndTime: endVal ? endVal.toISOString() : null,
           userId: user.uid,
           userName: user.displayName || user.email || "Anonymous",
+          userPhone: finalPhone,
         }),
       });
 
@@ -586,6 +642,30 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
             </div>
           </div>
 
+          {/* Phone Number Input (if missing from profile) */}
+          {!loadingProfilePhone && !profilePhone && (
+            <div className="space-y-2 p-4 border border-cyan-500/30 bg-cyan-950/10 animate-fade-in">
+              <label className="text-xs text-cyan-400 uppercase tracking-[0.2em] font-bold flex items-center gap-2">
+                <Phone className="w-4 h-4" /> Personal Phone Number (Mandatory)
+              </label>
+              <div className="flex gap-2">
+                <span className="bg-slate-900 border border-slate-700 text-slate-400 p-3 font-mono text-sm select-none flex items-center">+91</span>
+                <input
+                  type="tel"
+                  required
+                  pattern="[0-9]{10}"
+                  value={inputPhone}
+                  onChange={(e) => setInputPhone(e.target.value.replace(/[^0-9]/g, '').slice(0, 10))}
+                  placeholder="10-digit mobile number"
+                  className="flex-1 bg-slate-900 border border-slate-700 text-white p-3 font-mono text-sm focus:border-cyan-500 focus:outline-none placeholder:text-slate-600 transition-colors"
+                />
+              </div>
+              <p className="text-[10px] text-slate-500 font-mono">
+                &gt; A valid phone number is required to receive confirmation.
+              </p>
+            </div>
+          )}
+
           {/* Conflict Display */}
           {conflictError && (
             <div className="p-3 bg-red-950/50 border border-red-500 text-red-500 text-xs font-mono flex items-center gap-2 animate-pulse">
@@ -635,7 +715,7 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
             ABORT
           </button>
           <button 
-            disabled={isSubmitting || !!conflictError || (isPrebook && (!prebookDate || !prebookTime))} 
+            disabled={isSubmitting || !!conflictError || (isPrebook && (!prebookDate || !prebookTime)) || (!profilePhone && inputPhone.trim().length !== 10)} 
             onClick={handleProceedPayment}
             className="flex-1 py-4 font-black tracking-widest uppercase transition-colors disabled:bg-slate-800 disabled:text-slate-600 bg-cyan-500 hover:bg-cyan-400 text-black text-sm sm:text-base"
           >

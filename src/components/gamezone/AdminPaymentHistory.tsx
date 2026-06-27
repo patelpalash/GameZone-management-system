@@ -148,7 +148,12 @@ export default function AdminPaymentHistory() {
                         {booking.transactionId && <div className="text-slate-500 text-[10px] mt-0.5">{booking.transactionId}</div>}
                       </td>
                       <td className="py-3 px-4 font-bold text-white uppercase text-xs">
-                        {booking.userName || "Walk-in"}
+                        <div>{booking.userName || "Walk-in"}</div>
+                        {booking.userPhone && (
+                          <div className="text-[10px] text-slate-500 font-mono font-normal normal-case mt-0.5">
+                            {booking.userPhone}
+                          </div>
+                        )}
                       </td>
                       <td className="py-3 px-4 text-slate-300 text-xs uppercase whitespace-nowrap">
                         {stationDisplay}

@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [needsPhone, setNeedsPhone] = useState(false);
   const [phone, setPhone] = useState("");
   const [isSubmittingPhone, setIsSubmittingPhone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function checkUser() {
@@ -37,6 +38,7 @@ export default function LoginPage() {
 
   const handleSignIn = async () => {
     setIsSigningIn(true);
+    setError(null);
     try {
       await signInWithGoogle();
     } catch (error) {
@@ -47,19 +49,21 @@ export default function LoginPage() {
 
   const handlePhoneSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phone.trim() || phone.length < 10 || !user) return;
+    if (!phone.trim() || phone.length !== 10 || !user) return;
     setIsSubmittingPhone(true);
+    setError(null);
     try {
       const userDocRef = doc(db, "users", user.uid);
       await setDoc(userDocRef, {
         id: user.uid,
         name: user.displayName || "Unknown User",
-        phone: phone.trim(),
+        phone: `+91${phone.trim()}`,
         totalHoursPlayed: 0
       }, { merge: true });
       router.push("/dashboard");
     } catch (error) {
       console.error("Failed to save phone number:", error);
+      setError("Failed to save phone number. Please try again.");
       setIsSubmittingPhone(false);
     }
   };
@@ -137,19 +141,28 @@ export default function LoginPage() {
                 </p>
               </div>
 
+              {error && (
+                <div className="p-3 bg-red-950/50 border border-red-500 text-red-500 text-xs font-mono">
+                  {error}
+                </div>
+              )}
+
               <div className="space-y-2">
                 <label className="text-xs text-cyan-400 uppercase tracking-[0.2em] font-bold flex items-center gap-2">
                   <Phone className="w-4 h-4" /> Personal Phone Number
                 </label>
-                <input
-                  type="tel"
-                  required
-                  pattern="[0-9]{10}"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, '').slice(0, 10))}
-                  placeholder="10-digit mobile number"
-                  className="w-full bg-slate-900 border border-slate-700 text-white p-3 font-mono text-sm focus:border-cyan-500 focus:outline-none placeholder:text-slate-600 transition-colors"
-                />
+                <div className="flex gap-2">
+                  <span className="bg-slate-900 border border-slate-700 text-slate-400 p-3 font-mono text-sm select-none flex items-center">+91</span>
+                  <input
+                    type="tel"
+                    required
+                    pattern="[0-9]{10}"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, '').slice(0, 10))}
+                    placeholder="10-digit mobile number"
+                    className="flex-1 bg-slate-900 border border-slate-700 text-white p-3 font-mono text-sm focus:border-cyan-500 focus:outline-none placeholder:text-slate-600 transition-colors"
+                  />
+                </div>
               </div>
 
               <button
