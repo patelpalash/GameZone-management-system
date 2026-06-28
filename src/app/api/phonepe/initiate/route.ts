@@ -101,6 +101,56 @@ export async function POST(request: Request) {
     const pricePerHour = stationData.pricePerHour || 100;
     const serverCalculatedCost = Number(((pricePerHour / 60) * durationMinutes).toFixed(2));
 
+    // Validate station availability and prevent overlaps
+    if (isPrebook && scheduledStartTime && scheduledEndTime) {
+      const reqStart = new Date(scheduledStartTime).getTime();
+      const reqEnd = new Date(scheduledEndTime).getTime();
+
+      const existingBookingsSnap = await adminDb.collection("bookings")
+        .where("stationId", "==", stationId)
+        .where("status", "in", ["confirmed", "active", "pending_payment"])
+        .get();
+
+      for (const doc of existingBookingsSnap.docs) {
+        const b = doc.data();
+        
+        // Skip expired pending_payment bookings
+        if (b.status === "pending_payment" && b.createdAt) {
+           const createdAtMs = typeof b.createdAt.toDate === 'function' ? b.createdAt.toDate().getTime() : new Date(b.createdAt).getTime();
+           const ageInMs = Date.now() - createdAtMs;
+           if (ageInMs > 15 * 60 * 1000) continue;
+        }
+
+        let bStart: number;
+        let bEnd: number;
+
+        if (b.scheduledStartTime && b.scheduledEndTime) {
+          bStart = typeof b.scheduledStartTime.toDate === 'function' ? b.scheduledStartTime.toDate().getTime() : new Date(b.scheduledStartTime).getTime();
+          bEnd = typeof b.scheduledEndTime.toDate === 'function' ? b.scheduledEndTime.toDate().getTime() : new Date(b.scheduledEndTime).getTime();
+        } else if (b.startTime && b.endTime) {
+          bStart = typeof b.startTime.toDate === 'function' ? b.startTime.toDate().getTime() : new Date(b.startTime).getTime();
+          bEnd = typeof b.endTime.toDate === 'function' ? b.endTime.toDate().getTime() : new Date(b.endTime).getTime();
+        } else {
+          continue;
+        }
+
+        // Overlap logic: max(start1, start2) < min(end1, end2)
+        if (Math.max(reqStart, bStart) < Math.min(reqEnd, bEnd)) {
+          return NextResponse.json(
+            { success: false, error: "Time slot is already occupied." },
+            { status: 409 }
+          );
+        }
+      }
+    } else if (!isPrebook) {
+      if (stationData.status === "occupied") {
+        return NextResponse.json(
+          { success: false, error: "Station is currently occupied." },
+          { status: 409 }
+        );
+      }
+    }
+
     const orderId = `ORD_${Date.now()}_${Math.random()
       .toString(36)
       .substring(2, 7)}`;

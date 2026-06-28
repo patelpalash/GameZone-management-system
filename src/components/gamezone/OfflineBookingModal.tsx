@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Station, Booking } from "@/types";
 import { Loader2, AlertTriangle, User, UserPlus, Phone, Calendar as CalendarIcon, Clock } from "lucide-react";
-import { writeBatch, doc, Timestamp, collection } from "firebase/firestore";
+import { writeBatch, doc, Timestamp, collection, query, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { DayPicker } from "react-day-picker";
@@ -46,6 +46,38 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
   const [prebookDate, setPrebookDate] = useState<Date | undefined>(new Date(new Date().setHours(0, 0, 0, 0)));
   const [prebookTime, setPrebookTime] = useState("");
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [closures, setClosures] = useState<any[]>([]);
+  const [shopOpenTime, setShopOpenTime] = useState("09:00");
+  const [shopCloseTime, setShopCloseTime] = useState("23:00");
+
+  // Fetch closures and shop hours
+  useEffect(() => {
+    if (!isOpen) return;
+    const q = query(collection(db, "closures"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const list: any[] = [];
+      snapshot.forEach((docSnap) => {
+        list.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      setClosures(list);
+    });
+
+    const hoursUnsub = onSnapshot(doc(db, "settings", "shop_hours"), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.openTime) setShopOpenTime(data.openTime);
+        if (data.closeTime) setShopCloseTime(data.closeTime);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      hoursUnsub();
+    };
+  }, [isOpen]);
+
   useEffect(() => {
     if (!isOpen) {
       setSelectedDuration(60);
@@ -67,8 +99,11 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
     const prebookStr = format(prebookDate, "yyyy-MM-dd");
     const isToday = prebookStr === todayStr;
     
-    let startHour = 9; // System operations open at 9:00 AM
-    let startMinute = 0;
+    const [openH, openM] = shopOpenTime.split(":").map(Number);
+    const [closeH, closeM] = shopCloseTime.split(":").map(Number);
+    
+    let startHour = openH;
+    let startMinute = openM;
     
     if (isToday) {
       const now = new Date();
@@ -80,15 +115,21 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
       }
       // Buffer of 30 mins to allow payment / setup
       const prepTime = new Date(now.getTime() + 30 * 60000);
-      startHour = prepTime.getHours();
-      startMinute = prepTime.getMinutes() === 0 ? 0 : 30;
+      const prepStartH = prepTime.getHours();
+      const prepStartM = prepTime.getMinutes() === 0 ? 0 : 30;
+
+      // Only override if prepTime is later than opening time
+      if (prepStartH > openH || (prepStartH === openH && prepStartM > openM)) {
+        startHour = prepStartH;
+        startMinute = prepStartM;
+      }
     }
     
-    const endHour = 23; // System operations close at 11:59 PM
+    const endHour = closeH;
     let currentHour = startHour;
     let currentMin = startMinute;
     
-    while (currentHour < endHour || (currentHour === endHour && currentMin <= 30)) {
+    while (currentHour < endHour || (currentHour === endHour && currentMin <= closeM)) {
       const hh = String(currentHour).padStart(2, "0");
       const mm = String(currentMin).padStart(2, "0");
       const timeStr = `${hh}:${mm}`;
@@ -106,19 +147,93 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
       }
     }
     return slots;
-  }, [prebookDate]);
+  }, [prebookDate, shopOpenTime, shopCloseTime]);
+
+
+  const isSlotConflicted = useCallback((slotTime: string) => {
+    if (!prebookDate) return false;
+    const timeParts = slotTime.split(":");
+    if (timeParts.length < 2) return false;
+
+    const start = new Date(prebookDate);
+    start.setHours(Number(timeParts[0]), Number(timeParts[1]), 0, 0);
+    const end = new Date(start.getTime() + selectedDuration * 60000);
+
+    if (start.getTime() < Date.now()) return true;
+
+    for (const b of stationBookings) {
+      if (b.status === "pending_payment" && b.createdAt) {
+        const createdAtMs = typeof b.createdAt.toMillis === 'function' 
+          ? b.createdAt.toMillis() 
+          : new Date(b.createdAt as unknown as string).getTime();
+        const ageInMs = Date.now() - createdAtMs;
+        const fifteenMinutes = 15 * 60 * 1000;
+        if (ageInMs > fifteenMinutes) {
+          continue;
+        }
+      }
+
+      let bStart: Date;
+      let bEnd: Date;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const safeToDate = (ts: any) => typeof ts.toDate === 'function' ? ts.toDate() : new Date(ts);
+
+      if (b.startTime && b.endTime) {
+        bStart = safeToDate(b.startTime);
+        bEnd = safeToDate(b.endTime);
+      } else if (b.scheduledStartTime && b.scheduledEndTime) {
+        bStart = safeToDate(b.scheduledStartTime);
+        bEnd = safeToDate(b.scheduledEndTime);
+      } else {
+        continue;
+      }
+
+      try {
+        if (areIntervalsOverlapping(
+          { start, end },
+          { start: bStart, end: bEnd }
+        )) {
+          return true;
+        }
+      } catch {}
+    }
+
+    // Check against shop closures
+    for (const c of closures) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const safeToDate = (ts: any) => typeof ts.toDate === 'function' ? ts.toDate() : new Date(ts);
+      if (!c.startTime || !c.endTime) continue;
+      const cStart = safeToDate(c.startTime);
+      const cEnd = safeToDate(c.endTime);
+      try {
+        if (areIntervalsOverlapping(
+          { start, end },
+          { start: cStart, end: cEnd }
+        )) {
+          return true;
+        }
+      } catch {}
+    }
+
+    return false;
+  }, [prebookDate, selectedDuration, stationBookings, closures]);
 
   // Set first available time slot automatically
   useEffect(() => {
     if (isPrebook && timeSlots.length > 0 && !prebookTime) {
-      setPrebookTime(timeSlots[0].value);
+      const available = timeSlots.filter(s => !isSlotConflicted(s.value));
+      if (available.length > 0) {
+        setPrebookTime(available[0].value);
+      }
     }
-  }, [isPrebook, timeSlots, prebookTime]);
+  }, [isPrebook, timeSlots, prebookTime, isSlotConflicted]);
+
 
   if (!station) return null;
 
   const totalCost = (station.pricePerHour / 60) * selectedDuration;
-  
+
   const conflictError = (() => {
     let start: Date;
     if (isPrebook && prebookDate && prebookTime) {
@@ -169,9 +284,29 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
           return `CONFLICT: Occupied on ${formatDate(bStart)} from ${formatTime(bStart)} to ${formatTime(bEnd)}`;
         }
       } catch {
-        // Invalid dates
+        continue;
       }
     }
+
+    // Check against shop closures
+    for (const c of closures) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const safeToDate = (ts: any) => typeof ts.toDate === 'function' ? ts.toDate() : new Date(ts);
+      if (!c.startTime || !c.endTime) continue;
+      const cStart = safeToDate(c.startTime);
+      const cEnd = safeToDate(c.endTime);
+      try {
+        if (areIntervalsOverlapping(
+          { start, end },
+          { start: cStart, end: cEnd }
+        )) {
+          return `CONFLICT: Scheduled shop closure (${c.reason})`;
+        }
+      } catch {
+        continue;
+      }
+    }
+
     return null;
   })();
 
@@ -393,17 +528,19 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
                 <label className="text-[10px] text-yellow-400 uppercase tracking-[0.2em] font-bold flex items-center gap-1 mb-2">
                   <Clock className="w-3.5 h-3.5" /> Select Time Slot
                 </label>
-                {timeSlots.length > 0 ? (
+                {timeSlots.filter(slot => !isSlotConflicted(slot.value)).length > 0 ? (
                   <select
                     value={prebookTime}
                     onChange={(e) => setPrebookTime(e.target.value)}
                     className="w-full bg-slate-900 border border-slate-700 text-white p-3 font-mono text-sm focus:border-yellow-500 focus:outline-none"
                   >
-                    {timeSlots.map((slot) => (
-                      <option key={slot.value} value={slot.value}>
-                        {slot.label}
-                      </option>
-                    ))}
+                    {timeSlots
+                      .filter(slot => !isSlotConflicted(slot.value))
+                      .map((slot) => (
+                        <option key={slot.value} value={slot.value}>
+                          {slot.label}
+                        </option>
+                      ))}
                   </select>
                 ) : (
                   <div className="p-3 bg-slate-900 border border-slate-700 text-slate-500 text-xs font-mono text-center">

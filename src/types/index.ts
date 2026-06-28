@@ -41,6 +41,7 @@ export interface User {
   name: string;
   email?: string;
   phone: string;
+  dob?: string;
   totalHoursPlayed: number;
 }
 

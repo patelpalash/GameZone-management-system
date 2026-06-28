@@ -15,24 +15,27 @@ service cloud.firestore {
     // Bookings: Users can read their own, create their own, admins can update any
     match /bookings/{bookingId} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null
-                    && request.resource.data.userId == request.auth.uid;
-      allow update: if request.auth != null
-                    && (resource.data.userId == request.auth.uid
-                        || request.auth.token.email in ['patelpalash57work@gmail.com', 'officialpatel14@gmail.com']);
+      allow write: if request.auth != null
+                   && request.auth.token.email in ['patelpalash57work@gmail.com', 'officialpatel14@gmail.com'];
     }
 
     // Users: Users can read/write their own doc, admins can read/write any
     match /users/{userId} {
-      allow read, write: if request.auth != null
-                         && (request.auth.uid == userId || request.auth.token.email in ['patelpalash57work@gmail.com', 'officialpatel14@gmail.com']);
+      allow read: if request.auth != null && (request.auth.uid == userId || request.auth.token.email in ['patelpalash57work@gmail.com', 'officialpatel14@gmail.com']);
+      allow write: if request.auth != null && request.auth.token.email in ['patelpalash57work@gmail.com', 'officialpatel14@gmail.com'];
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId
+                    && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['totalHoursPlayed', 'walletBalance', 'role', 'isAdmin']));
     }
 
-    // Tournaments: Anyone can read, only admins can write
+    // Tournaments: Anyone can read, only admins can write, but users can register
     match /tournaments/{tournamentId} {
       allow read: if true;
-      allow write: if request.auth != null
-                   && request.auth.token.email in ['patelpalash57work@gmail.com', 'officialpatel14@gmail.com'];
+      allow create, delete: if request.auth != null
+                            && request.auth.token.email in ['patelpalash57work@gmail.com', 'officialpatel14@gmail.com'];
+      allow update: if request.auth != null
+                    && (request.auth.token.email in ['patelpalash57work@gmail.com', 'officialpatel14@gmail.com']
+                        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['registeredTeams']));
     }
 
     // Expenses, Inventory, Inventory Sales: Only admins can read/write
@@ -49,6 +52,18 @@ service cloud.firestore {
     match /inventory_sales/{saleId} {
       allow read, write: if request.auth != null
                          && request.auth.token.email in ['patelpalash57work@gmail.com', 'officialpatel14@gmail.com'];
+    }
+
+    match /closures/{closureId} {
+      allow read: if true;
+      allow write: if request.auth != null
+                   && request.auth.token.email in ['patelpalash57work@gmail.com', 'officialpatel14@gmail.com'];
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if request.auth != null
+                   && request.auth.token.email in ['patelpalash57work@gmail.com', 'officialpatel14@gmail.com'];
     }
 
     // Default deny for all other collections

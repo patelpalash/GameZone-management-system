@@ -18,7 +18,8 @@ import {
   CreditCard,
   History,
   TerminalSquare,
-  Mail
+  Mail,
+  Calendar,
 } from "lucide-react";
 
 interface UserDetailsModalProps {
@@ -158,6 +159,11 @@ export default function UserDetailsModal({ user, onClose }: UserDetailsModalProp
                 <div className="text-slate-400 font-mono text-xs flex items-center gap-1.5">
                   <Phone className="w-3.5 h-3.5 text-cyan-500 flex-shrink-0" /> {user.phone || "N/A"}
                 </div>
+                {user.dob && (
+                  <div className="text-slate-400 font-mono text-xs flex items-center gap-1.5 mt-1">
+                    <Calendar className="w-3.5 h-3.5 text-cyan-500 flex-shrink-0" /> DOB: {user.dob}
+                  </div>
+                )}
               </div>
             </div>
 

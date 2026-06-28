@@ -8,11 +8,12 @@ import AdminTournamentsManager from "@/components/gamezone/AdminTournamentsManag
 import AdminGuard from "@/components/gamezone/AdminGuard";
 import AdminPaymentHistory from "@/components/gamezone/AdminPaymentHistory";
 import AdminUsersManager from "@/components/gamezone/AdminUsersManager";
-import { ShieldAlert, ArrowLeft, Terminal, DollarSign, Gamepad2, History, Users } from "lucide-react";
+import AdminScheduleManager from "@/components/gamezone/AdminScheduleManager";
+import { ShieldAlert, ArrowLeft, Terminal, DollarSign, Gamepad2, History, Users, Calendar } from "lucide-react";
 import NextLink from "next/link";
 
 export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState<"operations" | "finance" | "tournaments" | "payments" | "users">("operations");
+  const [activeTab, setActiveTab] = useState<"operations" | "schedule" | "finance" | "tournaments" | "payments" | "users">("operations");
 
   return (
     <AdminGuard>
@@ -42,6 +43,12 @@ export default function AdminDashboard() {
             className={`px-6 py-3 font-black tracking-widest uppercase text-sm cyber-cut transition-all flex items-center gap-2 ${activeTab === 'operations' ? 'bg-cyan-500 text-black glow-cyan' : 'text-slate-400 border border-slate-800 hover:text-cyan-500'}`}
           >
             <Terminal className="w-4 h-4" /> LIVE_OPERATIONS
+          </button>
+          <button 
+            onClick={() => setActiveTab("schedule")}
+            className={`px-6 py-3 font-black tracking-widest uppercase text-sm cyber-cut transition-all flex items-center gap-2 ${activeTab === 'schedule' ? 'bg-purple-500 text-black shadow-[0_0_15px_rgba(168,85,247,0.5)]' : 'text-slate-400 border border-slate-800 hover:text-purple-500'}`}
+          >
+            <Calendar className="w-4 h-4" /> MASTER_SCHEDULE
           </button>
           <button 
             onClick={() => setActiveTab("tournaments")}
@@ -78,6 +85,12 @@ export default function AdminDashboard() {
             <div className="xl:col-span-2">
               <StationControl />
             </div>
+          </div>
+        )}
+
+        {activeTab === "schedule" && (
+          <div className="min-h-[calc(100vh-240px)]">
+            <AdminScheduleManager />
           </div>
         )}
 

@@ -153,7 +153,12 @@ export default function SortableStationCard({
           <button 
             className="flex-1 py-2 text-xs font-black tracking-widest uppercase bg-pink-500/20 border border-pink-500/50 text-pink-400 hover:bg-pink-500/30 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1"
             disabled={station.status !== 'occupied'}
-            onClick={(e) => { e.stopPropagation(); onEndSession(station); }}
+            onClick={(e) => { 
+              e.stopPropagation(); 
+              if (window.confirm(`Are you sure you want to forcefully END the active session on ${station.name}?`)) {
+                onEndSession(station); 
+              }
+            }}
           >
             <PowerOff className="w-3 h-3" /> END
           </button>

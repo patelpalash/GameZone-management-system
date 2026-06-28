@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Station, Booking } from "@/types";
 import { downloadReceipt } from "@/lib/receiptGenerator";
@@ -18,6 +18,7 @@ import {
   AlertCircle,
   IndianRupee,
   Wifi,
+  Trash2,
 } from "lucide-react";
 
 interface BookingHistoryModalProps {
@@ -91,6 +92,32 @@ export default function BookingHistoryModal({ station, onClose }: BookingHistory
 
     return () => unsubscribe();
   }, [station.id]);
+
+  const handleDeleteBooking = async (booking: Booking) => {
+    if (!window.confirm("Are you sure you want to permanently delete this booking?")) return;
+
+    try {
+      const batch = writeBatch(db);
+      
+      // If it's an active booking, free up the station
+      if (booking.status === "active") {
+        const stationRef = doc(db, "stations", booking.stationId);
+        batch.update(stationRef, {
+          status: "available",
+          currentSessionId: null
+        });
+      }
+
+      // Delete the booking record
+      const bookingRef = doc(db, "bookings", booking.id);
+      batch.delete(bookingRef);
+
+      await batch.commit();
+    } catch (err) {
+      console.error("Failed to delete booking:", err);
+      alert("Failed to delete booking. See console for details.");
+    }
+  };
 
   const filtered = filter === "all"
     ? bookings.filter(b => b.status !== "pending_payment") // hide incomplete payment sessions
@@ -218,6 +245,14 @@ export default function BookingHistoryModal({ station, onClose }: BookingHistory
                             <Receipt className="w-4 h-4" />
                           </button>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteBooking(booking)}
+                          className="p-1.5 bg-red-950/30 border border-red-900/50 hover:bg-red-900/50 hover:border-red-500 text-red-500/70 hover:text-red-400 transition-colors"
+                          title="Delete Booking"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                         <div className={`flex items-center gap-1.5 px-2 py-1 text-[10px] font-black tracking-widest border ${statusCfg.bg} ${statusCfg.color}`}>
                           <StatusIcon className="w-3 h-3" />
                           {statusCfg.label}

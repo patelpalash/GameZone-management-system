@@ -56,14 +56,20 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
   const [prebookDate, setPrebookDate] = useState<Date | undefined>(undefined);
   const [prebookTime, setPrebookTime] = useState("");
   const [stationBookings, setStationBookings] = useState<Booking[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [closures, setClosures] = useState<any[]>([]);
+  const [shopOpenTime, setShopOpenTime] = useState("09:00");
+  const [shopCloseTime, setShopCloseTime] = useState("23:00");
 
   // UI selection helper states
   const [customTimeActive, setCustomTimeActive] = useState(false);
 
-  // Phone states
+  // Profile states
   const [profilePhone, setProfilePhone] = useState("");
   const [inputPhone, setInputPhone] = useState("");
-  const [loadingProfilePhone, setLoadingProfilePhone] = useState(false);
+  const [profileDob, setProfileDob] = useState("");
+  const [inputDob, setInputDob] = useState("");
+  const [loadingProfileData, setLoadingProfileData] = useState(false);
 
   // Auto-populate date on prebook activate
   useEffect(() => {
@@ -85,21 +91,17 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
       setCustomTimeActive(false);
       setProfilePhone("");
       setInputPhone("");
-      setLoadingProfilePhone(false);
+      setProfileDob("");
+      setInputDob("");
+      setLoadingProfileData(false);
     }
   }, [isOpen]);
 
-  // Fetch user profile phone number
+  // Fetch user profile data
   useEffect(() => {
     if (!isOpen || !user) return;
-    const fetchPhone = async () => {
-      setLoadingProfilePhone(true);
-      if (user.phoneNumber) {
-        setProfilePhone(user.phoneNumber);
-        setInputPhone(user.phoneNumber.replace("+91", ""));
-        setLoadingProfilePhone(false);
-        return;
-      }
+    const fetchData = async () => {
+      setLoadingProfileData(true);
       try {
         const userDocRef = doc(db, "users", user.uid);
         const userDoc = await getDoc(userDocRef);
@@ -108,15 +110,26 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
           if (data.phone) {
             setProfilePhone(data.phone);
             setInputPhone(data.phone.replace("+91", ""));
+          } else if (user.phoneNumber) {
+            setProfilePhone(user.phoneNumber);
+            setInputPhone(user.phoneNumber.replace("+91", ""));
           }
+          
+          if (data.dob) {
+            setProfileDob(data.dob);
+            setInputDob(data.dob);
+          }
+        } else if (user.phoneNumber) {
+          setProfilePhone(user.phoneNumber);
+          setInputPhone(user.phoneNumber.replace("+91", ""));
         }
       } catch (err) {
-        console.error("Error loading user profile phone:", err);
+        console.error("Error loading user profile data:", err);
       } finally {
-        setLoadingProfilePhone(false);
+        setLoadingProfileData(false);
       }
     };
-    fetchPhone();
+    fetchData();
   }, [isOpen, user]);
 
   // Fetch active, pending, or confirmed bookings for this station to check overlaps
@@ -141,6 +154,33 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
 
     return () => unsubscribe();
   }, [isOpen, station]);
+
+  // Fetch closures and shop hours
+  useEffect(() => {
+    if (!isOpen) return;
+    const q = query(collection(db, "closures"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const list: any[] = [];
+      snapshot.forEach((docSnap) => {
+        list.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      setClosures(list);
+    });
+
+    const hoursUnsub = onSnapshot(doc(db, "settings", "shop_hours"), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.openTime) setShopOpenTime(data.openTime);
+        if (data.closeTime) setShopCloseTime(data.closeTime);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      hoursUnsub();
+    };
+  }, [isOpen]);
 
   // Compute conflict logic in real-time
   const conflictError = useMemo(() => {
@@ -189,17 +229,34 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
           { start, end },
           { start: bStart, end: bEnd }
         )) {
-          const formatTime = (d: Date) => d.toLocaleTimeString("en-US", { hour: '2-digit', minute: '2-digit', hour12: true });
-          const formatDate = (d: Date) => d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-          return `CONFLICT: Occupied on ${formatDate(bStart)} from ${formatTime(bStart)} to ${formatTime(bEnd)}`;
+          return "Selected time slot overlaps with another booking.";
+        }
+      } catch (err) {
+        console.error("Error checking intervals", err);
+      }
+    }
+
+    // Check against shop closures
+    for (const c of closures) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const safeToDate = (ts: any) => typeof ts.toDate === 'function' ? ts.toDate() : new Date(ts);
+      if (!c.startTime || !c.endTime) continue;
+      const cStart = safeToDate(c.startTime);
+      const cEnd = safeToDate(c.endTime);
+      try {
+        if (areIntervalsOverlapping(
+          { start, end },
+          { start: cStart, end: cEnd }
+        )) {
+          return `Time overlaps with a scheduled shop closure: ${c.reason}`;
         }
       } catch {
-        // Invalid dates
+        continue;
       }
     }
 
     return null;
-  }, [isPrebook, prebookDate, prebookTime, selectedDuration, stationBookings]);
+  }, [isPrebook, prebookDate, prebookTime, selectedDuration, stationBookings, closures]);
 
   // Generate dynamic half-hourly time slots
   const timeSlots = useMemo(() => {
@@ -209,8 +266,11 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
     const prebookStr = format(prebookDate, "yyyy-MM-dd");
     const isToday = prebookStr === todayStr;
     
-    let startHour = 9; // System operations open at 9:00 AM
-    let startMinute = 0;
+    const [openH, openM] = shopOpenTime.split(":").map(Number);
+    const [closeH, closeM] = shopCloseTime.split(":").map(Number);
+    
+    let startHour = openH;
+    let startMinute = openM;
     
     if (isToday) {
       const now = new Date();
@@ -222,15 +282,21 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
       }
       // Buffer of 30 mins to allow payment / setup
       const prepTime = new Date(now.getTime() + 30 * 60000);
-      startHour = prepTime.getHours();
-      startMinute = prepTime.getMinutes() === 0 ? 0 : 30;
+      const prepStartH = prepTime.getHours();
+      const prepStartM = prepTime.getMinutes() === 0 ? 0 : 30;
+
+      // Only override if prepTime is later than opening time
+      if (prepStartH > openH || (prepStartH === openH && prepStartM > openM)) {
+        startHour = prepStartH;
+        startMinute = prepStartM;
+      }
     }
     
-    const endHour = 23; // System operations close at 11:59 PM
+    const endHour = closeH;
     let currentHour = startHour;
     let currentMin = startMinute;
     
-    while (currentHour < endHour || (currentHour === endHour && currentMin <= 30)) {
+    while (currentHour < endHour || (currentHour === endHour && currentMin <= closeM)) {
       const hh = String(currentHour).padStart(2, "0");
       const mm = String(currentMin).padStart(2, "0");
       const timeStr = `${hh}:${mm}`;
@@ -249,7 +315,7 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
     }
     
     return slots;
-  }, [prebookDate]);
+  }, [prebookDate, shopOpenTime, shopCloseTime]);
 
   // Filter bookings for the selected prebookDate
   const bookingsForSelectedDate = useMemo(() => {
@@ -314,6 +380,24 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
         }
       } catch {}
     }
+
+    // Check against shop closures
+    for (const c of closures) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const safeToDate = (ts: any) => typeof ts.toDate === 'function' ? ts.toDate() : new Date(ts);
+      if (!c.startTime || !c.endTime) continue;
+      const cStart = safeToDate(c.startTime);
+      const cEnd = safeToDate(c.endTime);
+      try {
+        if (areIntervalsOverlapping(
+          { start, end },
+          { start: cStart, end: cEnd }
+        )) {
+          return true;
+        }
+      } catch {}
+    }
+
     return false;
   };
 
@@ -367,18 +451,26 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
       return;
     }
 
+    const finalDob = profileDob || inputDob.trim();
+    if (!finalDob) {
+      setError("Date of Birth is mandatory.");
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
     try {
-      if (!profilePhone) {
+      if (!profilePhone || !profileDob) {
         const userDocRef = doc(db, "users", user.uid);
         await setDoc(userDocRef, {
           id: user.uid,
           name: user.displayName || "Unknown User",
           phone: finalPhone,
+          dob: finalDob,
           totalHoursPlayed: 0
         }, { merge: true });
         setProfilePhone(finalPhone);
+        setProfileDob(finalDob);
       }
 
       const idToken = await auth.currentUser?.getIdToken(true);
@@ -643,7 +735,7 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
           </div>
 
           {/* Phone Number Input (if missing from profile) */}
-          {!loadingProfilePhone && !profilePhone && (
+          {!loadingProfileData && !profilePhone && (
             <div className="space-y-2 p-4 border border-cyan-500/30 bg-cyan-950/10 animate-fade-in">
               <label className="text-xs text-cyan-400 uppercase tracking-[0.2em] font-bold flex items-center gap-2">
                 <Phone className="w-4 h-4" /> Personal Phone Number (Mandatory)
@@ -662,6 +754,27 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
               </div>
               <p className="text-[10px] text-slate-500 font-mono">
                 &gt; A valid phone number is required to receive confirmation.
+              </p>
+            </div>
+          )}
+
+          {/* Date of Birth Input (if missing from profile) */}
+          {!loadingProfileData && !profileDob && (
+            <div className="space-y-2 p-4 border border-cyan-500/30 bg-cyan-950/10 animate-fade-in">
+              <label className="text-xs text-cyan-400 uppercase tracking-[0.2em] font-bold flex items-center gap-2">
+                <CalendarIcon className="w-4 h-4" /> Date of Birth (Mandatory)
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="date"
+                  required
+                  value={inputDob}
+                  onChange={(e) => setInputDob(e.target.value)}
+                  className="flex-1 bg-slate-900 border border-slate-700 text-white p-3 font-mono text-sm focus:border-cyan-500 focus:outline-none transition-colors"
+                />
+              </div>
+              <p className="text-[10px] text-slate-500 font-mono">
+                &gt; We require your DOB for legal verification and age-appropriate content.
               </p>
             </div>
           )}
