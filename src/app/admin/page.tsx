@@ -9,11 +9,13 @@ import AdminGuard from "@/components/gamezone/AdminGuard";
 import AdminPaymentHistory from "@/components/gamezone/AdminPaymentHistory";
 import AdminUsersManager from "@/components/gamezone/AdminUsersManager";
 import AdminScheduleManager from "@/components/gamezone/AdminScheduleManager";
-import { ShieldAlert, ArrowLeft, Terminal, DollarSign, Gamepad2, History, Users, Calendar } from "lucide-react";
+import AdminSettings from "@/components/gamezone/AdminSettings";
+import InventoryManager from "@/components/gamezone/finance/InventoryManager";
+import { ShieldAlert, ArrowLeft, Terminal, DollarSign, Gamepad2, History, Users, Calendar, Settings, Store } from "lucide-react";
 import NextLink from "next/link";
 
 export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState<"operations" | "schedule" | "finance" | "tournaments" | "payments" | "users">("operations");
+  const [activeTab, setActiveTab] = useState<"operations" | "inventory" | "schedule" | "finance" | "tournaments" | "payments" | "users" | "settings">("operations");
 
   return (
     <AdminGuard>
@@ -37,12 +39,18 @@ export default function AdminDashboard() {
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex gap-4 border-b border-slate-800 pb-2 overflow-x-auto">
+        <div className="flex flex-wrap gap-4 border-b border-slate-800 pb-2">
           <button 
             onClick={() => setActiveTab("operations")}
             className={`px-6 py-3 font-black tracking-widest uppercase text-sm cyber-cut transition-all flex items-center gap-2 ${activeTab === 'operations' ? 'bg-cyan-500 text-black glow-cyan' : 'text-slate-400 border border-slate-800 hover:text-cyan-500'}`}
           >
             <Terminal className="w-4 h-4" /> LIVE_OPERATIONS
+          </button>
+          <button 
+            onClick={() => setActiveTab("inventory")}
+            className={`px-6 py-3 font-black tracking-widest uppercase text-sm cyber-cut transition-all flex items-center gap-2 ${activeTab === 'inventory' ? 'bg-cyan-500 text-black glow-cyan' : 'text-slate-400 border border-slate-800 hover:text-cyan-500'}`}
+          >
+            <Store className="w-4 h-4" /> INVENTORY
           </button>
           <button 
             onClick={() => setActiveTab("schedule")}
@@ -74,6 +82,12 @@ export default function AdminDashboard() {
           >
             <Users className="w-4 h-4" /> USERS_DATABASE
           </button>
+          <button 
+            onClick={() => setActiveTab("settings")}
+            className={`px-6 py-3 font-black tracking-widest uppercase text-sm cyber-cut transition-all flex items-center gap-2 ${activeTab === 'settings' ? 'bg-red-500 text-black shadow-[0_0_15px_rgba(239,68,68,0.5)]' : 'text-slate-400 border border-slate-800 hover:text-red-500'}`}
+          >
+            <Settings className="w-4 h-4" /> SYSTEM_SETTINGS
+          </button>
         </div>
 
         {/* Tab Content */}
@@ -85,6 +99,12 @@ export default function AdminDashboard() {
             <div className="xl:col-span-2">
               <StationControl />
             </div>
+          </div>
+        )}
+
+        {activeTab === "inventory" && (
+          <div className="min-h-[calc(100vh-240px)]">
+            <InventoryManager />
           </div>
         )}
 
@@ -118,6 +138,11 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {activeTab === "settings" && (
+          <div className="min-h-[calc(100vh-240px)] flex justify-center">
+            <AdminSettings />
+          </div>
+        )}
       </div>
     </AdminGuard>
   );

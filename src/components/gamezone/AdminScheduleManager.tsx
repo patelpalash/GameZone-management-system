@@ -29,7 +29,13 @@ export default function AdminScheduleManager() {
   // Shop Hours states
   const [shopOpenTime, setShopOpenTime] = useState("09:00");
   const [shopCloseTime, setShopCloseTime] = useState("23:00");
+  const [weekendOpenTime, setWeekendOpenTime] = useState("09:00");
+  const [weekendCloseTime, setWeekendCloseTime] = useState("23:00");
   const [isSavingHours, setIsSavingHours] = useState(false);
+
+  // Pricing states
+  const [extraControllerPrice, setExtraControllerPrice] = useState<number>(50);
+  const [isSavingPricing, setIsSavingPricing] = useState(false);
 
   const generateTimeOptions = () => {
     const options = [];
@@ -96,12 +102,24 @@ export default function AdminScheduleManager() {
         const data = docSnap.data();
         if (data.openTime) setShopOpenTime(data.openTime);
         if (data.closeTime) setShopCloseTime(data.closeTime);
+        if (data.weekendOpenTime) setWeekendOpenTime(data.weekendOpenTime);
+        if (data.weekendCloseTime) setWeekendCloseTime(data.weekendCloseTime);
+      }
+    });
+
+    const pricingUnsub = onSnapshot(doc(db, "settings", "pricing"), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (typeof data.extraControllerPrice === "number") {
+          setExtraControllerPrice(data.extraControllerPrice);
+        }
       }
     });
 
     return () => {
       unsubscribe();
       hoursUnsub();
+      pricingUnsub();
     };
   }, []);
 
@@ -111,15 +129,32 @@ export default function AdminScheduleManager() {
       await setDoc(doc(db, "settings", "shop_hours"), {
         openTime: shopOpenTime,
         closeTime: shopCloseTime,
+        weekendOpenTime: weekendOpenTime,
+        weekendCloseTime: weekendCloseTime,
         updatedAt: Timestamp.now()
       }, { merge: true });
-      // We could use a toast here, but simple alert for now
       alert("Operating hours successfully updated across all platforms!");
     } catch (err) {
       console.error("Failed to save hours:", err);
       alert("Failed to update operating hours.");
     } finally {
       setIsSavingHours(false);
+    }
+  };
+
+  const handleSavePricing = async () => {
+    setIsSavingPricing(true);
+    try {
+      await setDoc(doc(db, "settings", "pricing"), {
+        extraControllerPrice,
+        updatedAt: Timestamp.now()
+      }, { merge: true });
+      alert("Pricing settings successfully updated!");
+    } catch (err) {
+      console.error("Failed to save pricing:", err);
+      alert("Failed to update pricing settings.");
+    } finally {
+      setIsSavingPricing(false);
     }
   };
 
@@ -202,34 +237,98 @@ export default function AdminScheduleManager() {
               Changes apply instantly to both user and admin booking grids.
             </p>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <label className="text-[10px] text-cyan-500 font-black tracking-widest uppercase">Open</label>
-              <select
-                value={shopOpenTime}
-                onChange={(e) => setShopOpenTime(e.target.value)}
-                className="bg-black border border-slate-700 text-white p-2 text-sm font-mono focus:border-cyan-500 focus:outline-none"
-              >
-                {timeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-              </select>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-4">
+              <span className="text-slate-400 font-mono text-xs w-20">WEEKDAYS:</span>
+              <div className="flex items-center gap-2">
+                <label className="text-[10px] text-cyan-500 font-black tracking-widest uppercase">Open</label>
+                <select
+                  value={shopOpenTime}
+                  onChange={(e) => setShopOpenTime(e.target.value)}
+                  className="bg-black border border-slate-700 text-white p-2 text-sm font-mono focus:border-cyan-500 focus:outline-none"
+                >
+                  {timeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                </select>
+              </div>
+              <div className="text-slate-500 font-bold">—</div>
+              <div className="flex items-center gap-2">
+                <label className="text-[10px] text-cyan-500 font-black tracking-widest uppercase">Close</label>
+                <select
+                  value={shopCloseTime}
+                  onChange={(e) => setShopCloseTime(e.target.value)}
+                  className="bg-black border border-slate-700 text-white p-2 text-sm font-mono focus:border-cyan-500 focus:outline-none"
+                >
+                  {timeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                </select>
+              </div>
             </div>
-            <div className="text-slate-500 font-bold">—</div>
-            <div className="flex items-center gap-2">
-              <label className="text-[10px] text-cyan-500 font-black tracking-widest uppercase">Close</label>
-              <select
-                value={shopCloseTime}
-                onChange={(e) => setShopCloseTime(e.target.value)}
-                className="bg-black border border-slate-700 text-white p-2 text-sm font-mono focus:border-cyan-500 focus:outline-none"
+
+            <div className="flex items-center gap-4">
+              <span className="text-pink-400 font-mono text-xs w-20">WEEKENDS:</span>
+              <div className="flex items-center gap-2">
+                <label className="text-[10px] text-pink-500 font-black tracking-widest uppercase">Open</label>
+                <select
+                  value={weekendOpenTime}
+                  onChange={(e) => setWeekendOpenTime(e.target.value)}
+                  className="bg-black border border-slate-700 text-white p-2 text-sm font-mono focus:border-pink-500 focus:outline-none"
+                >
+                  {timeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                </select>
+              </div>
+              <div className="text-slate-500 font-bold">—</div>
+              <div className="flex items-center gap-2">
+                <label className="text-[10px] text-pink-500 font-black tracking-widest uppercase">Close</label>
+                <select
+                  value={weekendCloseTime}
+                  onChange={(e) => setWeekendCloseTime(e.target.value)}
+                  className="bg-black border border-slate-700 text-white p-2 text-sm font-mono focus:border-pink-500 focus:outline-none"
+                >
+                  {timeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                </select>
+              </div>
+            </div>
+            
+            <div className="flex justify-end mt-2">
+              <button
+                onClick={handleSaveHours}
+                disabled={isSavingHours}
+                className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-black uppercase tracking-widest cyber-cut transition-all flex items-center gap-2 disabled:opacity-50"
               >
-                {timeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-              </select>
+                <Save className="w-4 h-4" /> {isSavingHours ? "SAVING..." : "UPDATE"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Global Pricing Settings */}
+      <div className="border border-green-500/20 bg-slate-900/50 p-6 cyber-cut">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-green-400 font-black uppercase tracking-widest flex items-center gap-2">
+              <Plus className="w-5 h-5" /> Global Pricing
+            </h3>
+            <p className="text-slate-500 text-xs font-mono mt-1">
+              Set standard add-on prices like extra controllers.
+            </p>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] text-green-500 font-black tracking-widest uppercase">Extra Controller Price (₹)</label>
+              <input
+                type="number"
+                min="0"
+                value={extraControllerPrice}
+                onChange={(e) => setExtraControllerPrice(Number(e.target.value))}
+                className="bg-black border border-slate-700 text-white p-2 text-sm font-mono focus:border-green-500 focus:outline-none w-32"
+              />
             </div>
             <button
-              onClick={handleSaveHours}
-              disabled={isSavingHours}
-              className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-black uppercase tracking-widest cyber-cut transition-all flex items-center gap-2 disabled:opacity-50 ml-2"
+              onClick={handleSavePricing}
+              disabled={isSavingPricing}
+              className="px-4 py-2 mt-4 bg-green-500 hover:bg-green-400 text-black font-black uppercase tracking-widest cyber-cut transition-all flex items-center gap-2 disabled:opacity-50"
             >
-              <Save className="w-4 h-4" /> {isSavingHours ? "SAVING..." : "UPDATE"}
+              <Save className="w-4 h-4" /> {isSavingPricing ? "SAVING..." : "UPDATE"}
             </button>
           </div>
         </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { collection, onSnapshot, doc, updateDoc, writeBatch, deleteDoc, query, where, Timestamp } from "firebase/firestore";
+import { collection, onSnapshot, doc, updateDoc, writeBatch, deleteDoc, query, where, Timestamp, getDoc, runTransaction } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Station, Game, Booking } from "@/types";
 import { MonitorPlay, LayoutGrid, Gamepad2, Plus, X, AlertCircle, Cpu } from "lucide-react";
@@ -24,6 +24,35 @@ import {
   arrayMove,
   sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
+
+const playBeep = () => {
+  try {
+    const AudioContext = window.AudioContext || (window as unknown as { webkitAudioContext: typeof window.AudioContext }).webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    
+    const playSingleBeep = (timeOffset: number) => {
+      const osc = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime + timeOffset);
+      gainNode.gain.setValueAtTime(0.05, ctx.currentTime + timeOffset);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + timeOffset + 0.5);
+      
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      osc.start(ctx.currentTime + timeOffset);
+      osc.stop(ctx.currentTime + timeOffset + 0.5);
+    };
+
+    // Play a gentle beep every 1 second for 10 seconds
+    for (let i = 0; i < 10; i++) {
+      playSingleBeep(i);
+    }
+  } catch(e) {
+    console.error("Audio play failed", e);
+  }
+};
 
 // Draggable template component for PC, PS5, Xbox nodes
 function DraggableTemplateCard({ id, type, label, icon: Icon }: { id: string; type: "PC" | "PS5" | "Xbox"; label: string; icon: React.ElementType }) {
@@ -98,7 +127,7 @@ export default function StationControl() {
   }, []);
 
   useEffect(() => {
-    const q = query(collection(db, "bookings"), where("status", "==", "confirmed"));
+    const q = query(collection(db, "bookings"), where("status", "in", ["confirmed", "pending_payment"]));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data: Booking[] = [];
       snapshot.forEach((docSnap) => {
@@ -148,25 +177,31 @@ export default function StationControl() {
           if (endTimeDate <= now) {
             console.log(`Auto-expiring session ${booking.id} for station ${booking.stationId}`);
             try {
-              // Re-check booking status to prevent race condition with other clients
               const bookingRef = doc(db, "bookings", booking.id);
-              const { getDoc } = await import("firebase/firestore");
-              const freshSnap = await getDoc(bookingRef);
-              if (!freshSnap.exists() || freshSnap.data()?.status !== "active") return;
-
-              const batch = writeBatch(db);
               const stationRef = doc(db, "stations", booking.stationId);
 
-              batch.update(stationRef, {
-                status: "available",
-                currentSessionId: null,
+              const didExpire = await runTransaction(db, async (transaction) => {
+                const freshSnap = await transaction.get(bookingRef);
+                if (!freshSnap.exists() || freshSnap.data()?.status !== "active") return false;
+
+                const stationSnap = await transaction.get(stationRef);
+                if (stationSnap.exists() && stationSnap.data()?.currentSessionId === booking.id) {
+                  transaction.update(stationRef, {
+                    status: "available",
+                    currentSessionId: null,
+                  });
+                }
+
+                transaction.update(bookingRef, {
+                  status: "completed",
+                });
+                return true;
               });
 
-              batch.update(bookingRef, {
-                status: "completed",
-              });
-
-              await batch.commit();
+              // Play gentle notification beep if successfully expired
+              if (didExpire) {
+                playBeep();
+              }
             } catch (err) {
               console.error("Error auto-ending session:", err);
             }
@@ -188,34 +223,29 @@ export default function StationControl() {
           if (startTimeDate <= now) {
             console.log(`Auto-activating pre-booked session ${booking.id} for station ${booking.stationId}`);
             try {
-              // Re-check booking status to prevent race condition
               const bookingRef = doc(db, "bookings", booking.id);
-              const { getDoc } = await import("firebase/firestore");
-              const freshSnap = await getDoc(bookingRef);
-              if (!freshSnap.exists() || freshSnap.data()?.status !== "confirmed") return;
-
-              // Check if station is available
               const stationRef = doc(db, "stations", booking.stationId);
-              const stationSnap = await getDoc(stationRef);
-              if (!stationSnap.exists() || stationSnap.data()?.status === "occupied") {
-                // If it's currently occupied, we wait for it to be freed
-                return; 
-              }
 
-              const batch = writeBatch(db);
+              await runTransaction(db, async (transaction) => {
+                const freshSnap = await transaction.get(bookingRef);
+                if (!freshSnap.exists() || freshSnap.data()?.status !== "confirmed") return;
 
-              batch.update(stationRef, {
-                status: "occupied",
-                currentSessionId: booking.id,
+                const stationSnap = await transaction.get(stationRef);
+                if (!stationSnap.exists() || stationSnap.data()?.status === "occupied") {
+                  return; 
+                }
+
+                transaction.update(stationRef, {
+                  status: "occupied",
+                  currentSessionId: booking.id,
+                });
+
+                transaction.update(bookingRef, {
+                  status: "active",
+                  startTime: booking.scheduledStartTime,
+                  endTime: booking.scheduledEndTime,
+                });
               });
-
-              batch.update(bookingRef, {
-                status: "active",
-                startTime: booking.scheduledStartTime,
-                endTime: booking.scheduledEndTime,
-              });
-
-              await batch.commit();
             } catch (err) {
               console.error("Error auto-activating session:", err);
             }
@@ -255,7 +285,10 @@ export default function StationControl() {
   };
 
   const handleEndSession = async (station: Station) => {
-    if (!station.currentSessionId) return;
+    if (!station.currentSessionId) {
+      alert("Error: No active session ID found on this node.");
+      return;
+    }
 
     try {
       const batch = writeBatch(db);
@@ -263,18 +296,24 @@ export default function StationControl() {
       const stationRef = doc(db, "stations", station.id);
       const bookingRef = doc(db, "bookings", station.currentSessionId);
 
+      const bookingSnap = await getDoc(bookingRef);
+
       batch.update(stationRef, {
         status: "available",
         currentSessionId: null,
       });
 
-      batch.update(bookingRef, {
-        status: "completed",
-      });
+      if (bookingSnap.exists()) {
+        batch.update(bookingRef, {
+          status: "completed",
+          endTime: Timestamp.now(), // Force timer to stop
+        });
+      }
 
       await batch.commit();
     } catch (error) {
       console.error("Error ending session:", error);
+      alert("Failed to end session: " + (error as Error).message);
     }
   };
 

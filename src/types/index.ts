@@ -34,6 +34,7 @@ export interface Booking {
   scheduledStartTime?: Timestamp | null;
   scheduledEndTime?: Timestamp | null;
   createdAt?: Timestamp | null;
+  extraControllers?: number;
 }
 
 export interface User {

@@ -1,5 +1,15 @@
 import { Booking, Station } from "@/types";
 
+function escapeHtml(str: string | undefined): string {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export function downloadReceipt(booking: Booking, station?: Station) {
   const formattedStart = booking.startTime || booking.scheduledStartTime 
     ? (booking.startTime || booking.scheduledStartTime)!.toDate().toLocaleString("en-IN", {
@@ -27,7 +37,7 @@ export function downloadReceipt(booking: Booking, station?: Station) {
     <!DOCTYPE html>
     <html>
     <head>
-      <title>GAMEZONE Receipt - ${booking.transactionId || booking.id}</title>
+      <title>GAMEZONE Receipt - ${escapeHtml(booking.transactionId || booking.id)}</title>
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
         body {
@@ -126,7 +136,7 @@ export function downloadReceipt(booking: Booking, station?: Station) {
       
       <div class="info-row">
         <span class="info-label">TXN REF:</span>
-        <span class="info-value">${booking.transactionId || booking.id}</span>
+        <span class="info-value">${escapeHtml(booking.transactionId || booking.id)}</span>
       </div>
       <div class="info-row">
         <span class="info-label">DATE/TIME:</span>
@@ -137,15 +147,15 @@ export function downloadReceipt(booking: Booking, station?: Station) {
       
       <div class="info-row">
         <span class="info-label">STATION:</span>
-        <span class="info-value">${station?.name || "General Node"} (${station?.type || "N/A"})</span>
+        <span class="info-value">${escapeHtml(station?.name || "General Node")} (${escapeHtml(station?.type || "N/A")})</span>
       </div>
       <div class="info-row">
         <span class="info-label">OPERATOR:</span>
-        <span class="info-value">${booking.userName || "ANONYMOUS"}</span>
+        <span class="info-value">${escapeHtml(booking.userName || "ANONYMOUS")}</span>
       </div>
       <div class="info-row">
         <span class="info-label">GATEWAY:</span>
-        <span class="info-value">${booking.paymentMethod || "N/A"}</span>
+        <span class="info-value">${escapeHtml(booking.paymentMethod || "N/A")}</span>
       </div>
       
       <div class="divider"></div>

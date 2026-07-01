@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Station, Booking } from "@/types";
 import { Loader2, AlertTriangle, User, UserPlus, Phone, Calendar as CalendarIcon, Clock } from "lucide-react";
-import { writeBatch, doc, Timestamp, collection, query, onSnapshot } from "firebase/firestore";
+import { writeBatch, doc, Timestamp, collection, query, onSnapshot, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { DayPicker } from "react-day-picker";
@@ -50,6 +50,13 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
   const [closures, setClosures] = useState<any[]>([]);
   const [shopOpenTime, setShopOpenTime] = useState("09:00");
   const [shopCloseTime, setShopCloseTime] = useState("23:00");
+  const [weekendOpenTime, setWeekendOpenTime] = useState("09:00");
+  const [weekendCloseTime, setWeekendCloseTime] = useState("23:00");
+  const [extraControllerPrice, setExtraControllerPrice] = useState(50);
+
+  const [extraControllers, setExtraControllers] = useState(0);
+  const [customTotalAmount, setCustomTotalAmount] = useState<string>("");
+  const [localControllerPrice, setLocalControllerPrice] = useState<string>("50");
 
   // Fetch closures and shop hours
   useEffect(() => {
@@ -69,12 +76,25 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
         const data = docSnap.data();
         if (data.openTime) setShopOpenTime(data.openTime);
         if (data.closeTime) setShopCloseTime(data.closeTime);
+        if (data.weekendOpenTime) setWeekendOpenTime(data.weekendOpenTime);
+        if (data.weekendCloseTime) setWeekendCloseTime(data.weekendCloseTime);
+      }
+    });
+
+    const pricingUnsub = onSnapshot(doc(db, "settings", "pricing"), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (typeof data.extraControllerPrice === "number") {
+          setExtraControllerPrice(data.extraControllerPrice);
+          setLocalControllerPrice(data.extraControllerPrice.toString());
+        }
       }
     });
 
     return () => {
       unsubscribe();
       hoursUnsub();
+      pricingUnsub();
     };
   }, [isOpen]);
 
@@ -88,6 +108,8 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
       setIsPrebook(false);
       setPrebookDate(new Date(new Date().setHours(0, 0, 0, 0)));
       setPrebookTime("");
+      setExtraControllers(0);
+      setCustomTotalAmount("");
     }
   }, [isOpen]);
 
@@ -98,9 +120,10 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
     const todayStr = format(new Date(), "yyyy-MM-dd");
     const prebookStr = format(prebookDate, "yyyy-MM-dd");
     const isToday = prebookStr === todayStr;
+    const isWeekend = prebookDate.getDay() === 0 || prebookDate.getDay() === 6;
     
-    const [openH, openM] = shopOpenTime.split(":").map(Number);
-    const [closeH, closeM] = shopCloseTime.split(":").map(Number);
+    const [openH, openM] = (isWeekend ? weekendOpenTime : shopOpenTime).split(":").map(Number);
+    const [closeH, closeM] = (isWeekend ? weekendCloseTime : shopCloseTime).split(":").map(Number);
     
     let startHour = openH;
     let startMinute = openM;
@@ -147,7 +170,7 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
       }
     }
     return slots;
-  }, [prebookDate, shopOpenTime, shopCloseTime]);
+  }, [prebookDate, shopOpenTime, shopCloseTime, weekendOpenTime, weekendCloseTime]);
 
 
   const isSlotConflicted = useCallback((slotTime: string) => {
@@ -232,7 +255,8 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
 
   if (!station) return null;
 
-  const totalCost = (station.pricePerHour / 60) * selectedDuration;
+  const calculatedTotalCost = (station.pricePerHour / 60) * selectedDuration + (extraControllers * extraControllerPrice);
+  const finalTotalCost = customTotalAmount !== "" ? Number(customTotalAmount) : calculatedTotalCost;
 
   const conflictError = (() => {
     let start: Date;
@@ -356,7 +380,8 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
         userName: guestName.trim() || "Walk-in Guest",
         userPhone: phone.trim(),
         durationMinutes: selectedDuration,
-        totalCost: Number(totalCost.toFixed(2)),
+        totalCost: Number(finalTotalCost.toFixed(2)),
+        extraControllers: extraControllers,
         status: isPrebook ? "confirmed" : "active",
         transactionId: paymentMode === "Cash" ? "OFFLINE_CASH" : "OFFLINE_ONLINE",
         paymentMethod: paymentMode,
@@ -558,7 +583,10 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
               {DURATIONS.map((dur) => (
                 <button
                   key={dur.minutes}
-                  onClick={() => setSelectedDuration(dur.minutes)}
+                  onClick={() => {
+                    setSelectedDuration(dur.minutes);
+                    setCustomTotalAmount(""); // Reset custom amount on duration change
+                  }}
                   className={`
                     px-4 py-2 text-sm font-bold tracking-widest cyber-cut-reverse transition-all uppercase
                     ${selectedDuration === dur.minutes 
@@ -613,11 +641,77 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
             </div>
           )}
 
-          {/* Cost Display */}
-          <div className="p-6 border border-yellow-500/30 bg-yellow-950/20 cyber-cut-reverse flex items-center justify-between">
-            <div className="space-y-1">
-              <p className="text-xs text-yellow-500 uppercase tracking-[0.2em]">TOTAL_AMOUNT</p>
-              <p className="text-5xl font-black text-yellow-400 drop-shadow-[0_0_10px_rgba(252,238,10,0.5)]">₹{totalCost.toFixed(2)}</p>
+          {/* Extra Controllers */}
+          {(station.type === "PS5" || station.type === "Xbox" || station.type === "PC") && (
+            <div>
+              <div className="text-xs text-yellow-500 mb-2 uppercase tracking-[0.2em] font-bold flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  EXTRA_CONTROLLERS
+                  <span className="text-slate-400 font-mono text-[10px] lowercase flex items-center gap-1 bg-black px-2 py-1 rounded border border-slate-800">
+                    (+₹ 
+                    <input 
+                      type="number" 
+                      value={localControllerPrice}
+                      onChange={(e) => setLocalControllerPrice(e.target.value)}
+                      onBlur={async () => {
+                        const val = Number(localControllerPrice);
+                        if (!isNaN(val) && val >= 0) {
+                          setExtraControllerPrice(val);
+                          await setDoc(doc(db, "settings", "pricing"), {
+                            extraControllerPrice: val,
+                            updatedAt: Timestamp.now()
+                          }, { merge: true });
+                        } else {
+                          setLocalControllerPrice(extraControllerPrice.toString());
+                        }
+                      }}
+                      className="bg-transparent border-b border-yellow-500/50 w-8 text-yellow-500 focus:outline-none focus:border-yellow-400 text-center"
+                    /> 
+                    each)
+                  </span>
+                </span>
+              </div>
+              <div className="flex items-center gap-4 p-3 bg-slate-900 border border-slate-700">
+                <button
+                  onClick={() => {
+                    if (extraControllers > 0) {
+                      setExtraControllers(prev => prev - 1);
+                      setCustomTotalAmount("");
+                    }
+                  }}
+                  className="w-10 h-10 flex items-center justify-center bg-black border border-slate-600 text-yellow-500 hover:bg-slate-800 disabled:opacity-50 font-bold"
+                  disabled={extraControllers === 0}
+                >
+                  -
+                </button>
+                <span className="text-2xl font-black text-white w-8 text-center">{extraControllers}</span>
+                <button
+                  onClick={() => {
+                    setExtraControllers(prev => prev + 1);
+                    setCustomTotalAmount("");
+                  }}
+                  className="w-10 h-10 flex items-center justify-center bg-black border border-slate-600 text-yellow-500 hover:bg-slate-800 font-bold"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Cost Display and Custom Override */}
+          <div className="p-6 border border-yellow-500/30 bg-yellow-950/20 cyber-cut-reverse flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="space-y-2 flex-1 w-full">
+              <label className="text-xs text-yellow-500 uppercase tracking-[0.2em] font-bold">TOTAL_AMOUNT (₹)</label>
+              <input
+                type="number"
+                min="0"
+                value={customTotalAmount !== "" ? customTotalAmount : calculatedTotalCost.toFixed(2)}
+                onChange={(e) => setCustomTotalAmount(e.target.value)}
+                className="w-full bg-black border border-yellow-500/50 text-5xl font-black text-yellow-400 p-2 focus:outline-none focus:border-yellow-400 drop-shadow-[0_0_10px_rgba(252,238,10,0.2)]"
+              />
+              {customTotalAmount !== "" && (
+                <p className="text-xs text-cyan-400 font-mono italic">Custom price override active</p>
+              )}
             </div>
             <div className="text-right text-[10px] text-slate-400 font-mono space-y-1">
               <p>&gt; ASSIGN MODE: OFFLINE ({paymentMode.toUpperCase()})</p>

@@ -1,38 +1,48 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { collection, query, where, onSnapshot, addDoc, Timestamp, writeBatch, doc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, Timestamp, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Booking, Station } from "@/types";
-import { DollarSign, TrendingUp, MonitorPlay, Gamepad2, CreditCard, Banknote, Plus, Download, Store, TrendingDown } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { useAuth } from "@/contexts/AuthContext";
+import { DollarSign, TrendingUp, MonitorPlay, Gamepad2, CreditCard, Banknote, Download, Store, TrendingDown } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { DoubleEntryLedger, LedgerTransaction } from "./finance/DoubleEntryLedger";
 import ExpenseManager from "./finance/ExpenseManager";
-import InventoryManager from "./finance/InventoryManager";
-import { getExpensesForDateRange, getInventorySalesForDateRange, Expense, InventorySale } from "@/lib/financeApi";
+import InventorySalesHistory from "./finance/InventorySalesHistory";
+import { Expense, InventorySale } from "@/lib/financeApi";
 
 export default function AccountingDashboard() {
-  const { user } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [stations, setStations] = useState<Station[]>([]);
   
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [inventorySales, setInventorySales] = useState<InventorySale[]>([]);
 
-  const [startDateStr, setStartDateStr] = useState("");
+  const [startDateStr, setStartDateStr] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d.toISOString().split('T')[0];
+  });
   const [endDateStr, setEndDateStr] = useState("");
 
-  const [activeTab, setActiveTab] = useState<"ledger" | "inventory" | "expenses">("ledger");
+  const quickSelectValue = useMemo(() => {
+    if (!startDateStr && !endDateStr) return 'all';
+    if (!endDateStr && startDateStr) {
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      const start = new Date(startDateStr);
+      start.setHours(0,0,0,0);
+      const diff = Math.round((today.getTime() - start.getTime()) / (1000 * 3600 * 24));
+      if (diff === 7) return '7';
+      if (diff === 10) return '10';
+      if (diff === 15) return '15';
+      if (diff === 30) return '30';
+      if (diff === 365) return '365';
+    }
+    return 'custom';
+  }, [startDateStr, endDateStr]);
 
-  // Offline log state
-  const [amount, setAmount] = useState("");
-  const [note, setNote] = useState("");
-  const [stationId, setStationId] = useState("");
-  const [durationMinutes, setDurationMinutes] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [successMsg, setSuccessMsg] = useState("");
-  const [errorMsg, setErrorMsg] = useState("");
+  const [activeTab, setActiveTab] = useState<"ledger" | "inventory_sales" | "expenses">("ledger");
 
   useEffect(() => {
     // 1. Fetch Stations
@@ -45,8 +55,8 @@ export default function AccountingDashboard() {
     };
     fetchStations();
 
-    // 2. Fetch Bookings
-    const q = query(collection(db, "bookings"), where("status", "==", "completed"));
+    // 2. Fetch Bookings (include refunded so the ledger shows the original revenue, balanced by the refund expense)
+    const q = query(collection(db, "bookings"), where("status", "in", ["completed", "refunded"]));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data: Booking[] = [];
       snapshot.forEach(d => data.push({ id: d.id, ...d.data() } as Booking));
@@ -58,24 +68,40 @@ export default function AccountingDashboard() {
 
   // Fetch Finance Data
   useEffect(() => {
-    const fetchFinance = async () => {
-      try {
-        const start = startDateStr ? new Date(startDateStr) : new Date(0); // Epoch if none
-        const end = endDateStr ? new Date(endDateStr) : new Date(2100, 1, 1);
-        
-        // Include time up to the end of the day for endDate
-        end.setHours(23, 59, 59, 999);
+    const start = startDateStr ? new Date(startDateStr) : new Date(0); // Epoch if none
+    const end = endDateStr ? new Date(endDateStr) : new Date(2100, 1, 1);
+    
+    // Include time up to the end of the day for endDate
+    end.setHours(23, 59, 59, 999);
 
-        const exp = await getExpensesForDateRange(start, end);
-        const invSales = await getInventorySalesForDateRange(start, end);
-        
-        setExpenses(exp);
-        setInventorySales(invSales);
-      } catch (err) {
-        console.error("Finance fetch error:", err);
-      }
+    const qExp = query(
+      collection(db, "expenses"),
+      where("createdAt", ">=", Timestamp.fromDate(start)),
+      where("createdAt", "<=", Timestamp.fromDate(end)),
+      orderBy("createdAt", "desc")
+    );
+    const unsubExp = onSnapshot(qExp, (snap) => {
+      const data: Expense[] = [];
+      snap.forEach(d => data.push({ id: d.id, ...d.data() } as Expense));
+      setExpenses(data);
+    });
+
+    const qInv = query(
+      collection(db, "inventory_sales"),
+      where("createdAt", ">=", Timestamp.fromDate(start)),
+      where("createdAt", "<=", Timestamp.fromDate(end)),
+      orderBy("createdAt", "desc")
+    );
+    const unsubInv = onSnapshot(qInv, (snap) => {
+      const data: InventorySale[] = [];
+      snap.forEach(d => data.push({ id: d.id, ...d.data() } as InventorySale));
+      setInventorySales(data);
+    });
+
+    return () => {
+      unsubExp();
+      unsubInv();
     };
-    fetchFinance();
   }, [startDateStr, endDateStr]);
 
   const filteredBookings = useMemo(() => {
@@ -170,7 +196,8 @@ export default function AccountingDashboard() {
     inventorySales.forEach(s => {
       tr += s.totalRevenue;
       inv += s.totalRevenue;
-      cash += s.totalRevenue; // Assuming snacks are usually cash. Adapt if you track UPI for snacks.
+      if (s.paymentMethod === "Cash" || !s.paymentMethod) cash += s.totalRevenue;
+      else upi += s.totalRevenue;
     });
 
     expenses.forEach(e => {
@@ -182,105 +209,33 @@ export default function AccountingDashboard() {
 
   const netProfit = totalRev - totalExp;
 
-  // Chart Data (Last 7 Days)
+  // Chart Data (Dynamic Dates)
   const chartData = useMemo(() => {
-    const dataMap: Record<string, { name: string, revenue: number, expenses: number }> = {};
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      dataMap[dateStr] = { name: dateStr, revenue: 0, expenses: 0 };
-    }
-
+    const dataMap: Record<string, { name: string, revenue: number, expenses: number, timestamp: number }> = {};
+    
     ledgerTransactions.forEach(tx => {
       const d = new Date(tx.timestamp);
       const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      if (dataMap[dateStr]) {
-        if (tx.type === 'revenue') dataMap[dateStr].revenue += tx.amount;
-        else dataMap[dateStr].expenses += tx.amount;
+      
+      if (!dataMap[dateStr]) {
+        dataMap[dateStr] = { name: dateStr, revenue: 0, expenses: 0, timestamp: new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() };
       }
+      
+      if (tx.type === 'revenue') dataMap[dateStr].revenue += tx.amount;
+      else dataMap[dateStr].expenses += tx.amount;
     });
 
-    return Object.values(dataMap);
+    return Object.values(dataMap).sort((a, b) => a.timestamp - b.timestamp);
   }, [ledgerTransactions]);
 
-  const handleDurationChange = (val: string) => {
-    setDurationMinutes(val);
-    if (stationId && val && !isNaN(Number(val))) {
-      const station = stations.find(s => s.id === stationId);
-      if (station) setAmount(Math.round((station.pricePerHour / 60) * Number(val)).toString());
-    }
-  };
-
-  const handleStationChange = (val: string) => {
-    setStationId(val);
-    if (val && durationMinutes && !isNaN(Number(durationMinutes))) {
-      const station = stations.find(s => s.id === val);
-      if (station) setAmount(Math.round((station.pricePerHour / 60) * Number(durationMinutes)).toString());
-    }
-  };
-
-  const handleLogCash = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
-      setErrorMsg("Please enter a valid amount");
-      return;
-    }
-    
-    setIsSubmitting(true);
-    setErrorMsg(""); setSuccessMsg("");
-
-    try {
-      const nowVal = Timestamp.now();
-      const mockTxnId = "CASH-" + Math.random().toString(36).substring(2, 9).toUpperCase();
-      
-      if (stationId) {
-        const selectedStation = stations.find(s => s.id === stationId);
-        if (!selectedStation) throw new Error("Station not found");
-        if (selectedStation.status !== "available") throw new Error(`Station is ${selectedStation.status}`);
-        
-        const durationVal = Number(durationMinutes);
-        const startTime = Timestamp.fromDate(new Date());
-        const endTime = Timestamp.fromDate(new Date(Date.now() + durationVal * 60 * 1000));
-
-        const batch = writeBatch(db);
-        const bookingDocRef = doc(collection(db, "bookings"));
-        const stationDocRef = doc(db, "stations", stationId);
-
-        batch.set(bookingDocRef, {
-          id: bookingDocRef.id,
-          stationId, userId: user?.uid || "admin",
-          userName: note || "Walk-in Cash Customer",
-          durationMinutes: durationVal, totalCost: Number(amount),
-          status: "active", transactionId: mockTxnId, paymentMethod: "Cash",
-          startTime, endTime, createdAt: nowVal, isPrebook: false,
-          notes: note || "Manual offline live session entry"
-        });
-        batch.update(stationDocRef, { status: "occupied", currentSessionId: bookingDocRef.id });
-        await batch.commit();
-        setSuccessMsg(`Logged & Activated ₹${amount} offline session for ${selectedStation.name}`);
-      } else {
-        await addDoc(collection(db, "bookings"), {
-          stationId: "general", userId: user?.uid || "admin",
-          userName: note || "Walk-in Cash Customer", durationMinutes: 0,
-          totalCost: Number(amount), status: "completed", transactionId: mockTxnId,
-          paymentMethod: "Cash", startTime: nowVal, endTime: nowVal, createdAt: nowVal,
-          isPrebook: false, notes: note || "Manual admin cash entry"
-        });
-        setSuccessMsg(`Logged ₹${amount} cash entry`);
-      }
-      setAmount(""); setNote(""); setStationId(""); setDurationMinutes("");
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        setErrorMsg(err.message || "Failed to register cash entry");
-      } else {
-        setErrorMsg("Failed to register cash entry");
-      }
-    } finally {
-      setIsSubmitting(false);
-      setTimeout(() => setSuccessMsg(""), 5000);
-    }
-  };
+  // Revenue breakdown for PieChart
+  const pieData = useMemo(() => {
+    return [
+      { name: "PC Revenue", value: pcRev, color: "#06b6d4" },
+      { name: "Console Revenue", value: consoleRev, color: "#8b5cf6" },
+      { name: "Inventory", value: invRev, color: "#f59e0b" },
+    ].filter(item => item.value > 0);
+  }, [pcRev, consoleRev, invRev]);
 
   const exportToCSV = () => {
     if (ledgerTransactions.length === 0) return;
@@ -308,14 +263,14 @@ export default function AccountingDashboard() {
         </h2>
         
         {/* Navigation Tabs */}
-        <div className="flex gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 hide-scrollbar">
+        <div className="flex flex-wrap gap-2 w-full md:w-auto pb-2 md:pb-0">
           <button onClick={() => setActiveTab("ledger")} className={`px-4 py-2 font-black uppercase text-xs tracking-widest cyber-cut transition-all shrink-0 ${activeTab === 'ledger' ? 'bg-emerald-500 text-black' : 'border border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10'}`}>Overview</button>
-          <button onClick={() => setActiveTab("inventory")} className={`px-4 py-2 font-black uppercase text-xs tracking-widest cyber-cut transition-all shrink-0 ${activeTab === 'inventory' ? 'bg-cyan-500 text-black' : 'border border-cyan-500/30 text-cyan-500 hover:bg-cyan-500/10'}`}>Inventory</button>
+          <button onClick={() => setActiveTab("inventory_sales")} className={`px-4 py-2 font-black uppercase text-xs tracking-widest cyber-cut transition-all shrink-0 ${activeTab === 'inventory_sales' ? 'bg-cyan-500 text-black' : 'border border-cyan-500/30 text-cyan-500 hover:bg-cyan-500/10'}`}>Inventory_Payments</button>
           <button onClick={() => setActiveTab("expenses")} className={`px-4 py-2 font-black uppercase text-xs tracking-widest cyber-cut transition-all shrink-0 ${activeTab === 'expenses' ? 'bg-pink-500 text-black' : 'border border-pink-500/30 text-pink-500 hover:bg-pink-500/10'}`}>Expenses</button>
         </div>
       </div>
 
-      {activeTab === "inventory" && <InventoryManager />}
+      {activeTab === "inventory_sales" && <InventorySalesHistory sales={inventorySales} />}
       {activeTab === "expenses" && <ExpenseManager />}
 
       {activeTab === "ledger" && (
@@ -323,6 +278,30 @@ export default function AccountingDashboard() {
           {/* Date Filter & Export Controls */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 p-4 border border-slate-800 bg-slate-950/40 cyber-cut">
             <div className="flex flex-wrap items-center gap-3">
+              <select 
+                value={quickSelectValue}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === 'all') {
+                    setStartDateStr(''); setEndDateStr('');
+                  } else if (val !== 'custom') {
+                    const d = new Date();
+                    d.setDate(d.getDate() - parseInt(val));
+                    setStartDateStr(d.toISOString().split('T')[0]);
+                    setEndDateStr('');
+                  }
+                }}
+                className="bg-black border border-slate-800 text-cyan-500 text-xs font-mono p-2 focus:outline-none focus:border-cyan-500 cursor-pointer uppercase tracking-widest"
+              >
+                <option value="custom" disabled hidden>Custom Range</option>
+                <option value="7">Last 7 Days</option>
+                <option value="10">Last 10 Days</option>
+                <option value="15">Last 15 Days</option>
+                <option value="30">Monthly</option>
+                <option value="365">Yearly</option>
+                <option value="all">All Time</option>
+              </select>
+
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-slate-500 uppercase font-mono">From:</span>
                 <input type="date" value={startDateStr} onChange={(e) => setStartDateStr(e.target.value)} className="bg-black border border-slate-800 text-emerald-500 text-xs font-mono p-2 focus:outline-none focus:border-emerald-500" />
@@ -383,60 +362,62 @@ export default function AccountingDashboard() {
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             {/* Chart Section */}
             <div className="xl:col-span-2 p-6 border-2 border-slate-800 bg-slate-900/50 cyber-cut-reverse">
-              <h3 className="text-sm font-bold tracking-widest text-slate-400 uppercase mb-6">Revenue vs Expenses (Last 7 Days)</h3>
+              <h3 className="text-sm font-bold tracking-widest text-slate-400 uppercase mb-6">Revenue vs Expenses</h3>
               <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                     <XAxis dataKey="name" stroke="#64748b" tick={{ fill: '#94a3b8', fontSize: 12 }} tickLine={false} axisLine={false} />
                     <YAxis stroke="#64748b" tick={{ fill: '#94a3b8', fontSize: 12 }} tickLine={false} axisLine={false} tickFormatter={(val) => `₹${val}`} />
-                    <Tooltip cursor={{ fill: '#0f172a' }} contentStyle={{ backgroundColor: '#020617', borderColor: '#10b981', color: '#10b981', fontFamily: 'monospace' }} />
-                    <Bar dataKey="revenue" fill="#10b981" radius={[2, 2, 0, 0]} name="Revenue" />
-                    <Bar dataKey="expenses" fill="#ec4899" radius={[2, 2, 0, 0]} name="Expenses" />
-                  </BarChart>
+                    <RechartsTooltip contentStyle={{ backgroundColor: '#020617', borderColor: '#1e293b', color: '#fff', fontFamily: 'monospace' }} />
+                    <Line type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={3} dot={{ fill: '#10b981', r: 4 }} activeDot={{ r: 6 }} name="Revenue" />
+                    <Line type="monotone" dataKey="expenses" stroke="#ec4899" strokeWidth={3} dot={{ fill: '#ec4899', r: 4 }} activeDot={{ r: 6 }} name="Expenses" />
+                  </LineChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            {/* Offline Payment Logger */}
-            <div className="p-6 border-2 border-slate-800 bg-slate-900/50 cyber-cut">
-              <h3 className="text-sm font-bold tracking-widest text-slate-400 uppercase mb-4">Log_Offline_Booking</h3>
-              <p className="text-[10px] text-slate-500 font-mono mb-4 border-b border-slate-800 pb-2">
-                Use this to log walk-in console/PC sessions. For Snacks/Drinks, use the Inventory Tab.
-              </p>
-              
-              <form onSubmit={handleLogCash} className="space-y-4">
-                <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Amount (₹)</label>
-                  <input type="number" required min="1" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full bg-black border border-slate-700 text-emerald-500 font-bold p-3 focus:outline-none focus:border-emerald-500" placeholder="0.00" />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Customer / Note</label>
-                  <input type="text" required value={note} onChange={(e) => setNote(e.target.value)} className="w-full bg-black border border-slate-700 text-white p-3 focus:outline-none focus:border-emerald-500" placeholder="Walk-in" />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Station Node</label>
-                  <select value={stationId} onChange={(e) => handleStationChange(e.target.value)} className="w-full bg-black border border-slate-700 text-white p-3 focus:outline-none focus:border-emerald-500 font-mono text-xs">
-                    <option value="">None (General Revenue)</option>
-                    {stations.map(s => <option key={s.id} value={s.id}>{s.name} ({s.type})</option>)}
-                  </select>
-                </div>
-
-                {stationId && (
-                  <div className="animate-fade-in">
-                    <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Duration (Min)</label>
-                    <input type="number" required min="1" value={durationMinutes} onChange={(e) => handleDurationChange(e.target.value)} className="w-full bg-black border border-slate-700 text-white p-3 focus:outline-none focus:border-emerald-500 font-mono text-xs" />
+            {/* Revenue Breakdown Pie Chart */}
+            <div className="p-6 border-2 border-slate-800 bg-slate-900/50 cyber-cut flex flex-col">
+              <h3 className="text-sm font-bold tracking-widest text-slate-400 uppercase mb-4 text-center">Revenue Breakdown</h3>
+              <div className="flex-1 min-h-[250px] w-full">
+                {pieData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={pieData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {pieData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip 
+                        contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', color: '#f8fafc', fontFamily: 'monospace' }} 
+                        itemStyle={{ color: '#f8fafc' }}
+                        formatter={(value: unknown) => [`₹${(Number(value) || 0).toLocaleString()}`, '']}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-slate-600 font-mono text-xs uppercase">
+                    NO_REVENUE_DATA
                   </div>
                 )}
-
-                {errorMsg && <p className="text-xs text-red-500 font-mono">&gt; {errorMsg}</p>}
-                {successMsg && <p className="text-xs text-emerald-500 font-mono">&gt; {successMsg}</p>}
-
-                <button type="submit" disabled={isSubmitting} className="w-full py-3 bg-emerald-500/20 border border-emerald-500 text-emerald-500 font-black tracking-widest uppercase hover:bg-emerald-500 hover:text-black transition-colors flex justify-center items-center gap-2 disabled:opacity-50">
-                  {isSubmitting ? <span className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /> : <Plus className="w-4 h-4"/>}
-                  LOG_BOOKING
-                </button>
-              </form>
+              </div>
+              <div className="flex flex-wrap justify-center gap-4 mt-2">
+                {pieData.map(item => (
+                  <div key={item.name} className="flex items-center gap-2 text-xs font-mono">
+                    <span className="w-3 h-3 block" style={{ backgroundColor: item.color }} />
+                    <span className="text-slate-300">{item.name}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 

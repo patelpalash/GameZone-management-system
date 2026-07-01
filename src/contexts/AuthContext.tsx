@@ -25,11 +25,10 @@ export function useAuth() {
   return useContext(AuthContext);
 }
 
-// Define admin emails here. Only these users can access /admin.
-export const ADMIN_EMAILS: string[] = [
-  "patelpalash57work@gmail.com",
-  "officialpatel14@gmail.com",
-];
+export const ADMIN_EMAILS: string[] = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || "")
+  .split(",")
+  .map(email => email.trim().toLowerCase())
+  .filter(Boolean);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -46,6 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             id: user.uid,
             name: user.displayName || "Unknown User",
             email: user.email || "",
+            photoURL: user.photoURL || "",
           }, { merge: true });
         } catch (error) {
           console.error("Error syncing user data to Firestore:", error);

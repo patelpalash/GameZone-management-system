@@ -8,11 +8,14 @@ export default function InventoryManager() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // New item form state
   const [showAddForm, setShowAddForm] = useState(false);
   const [newItem, setNewItem] = useState({ name: "", category: "snack", costPrice: "", sellingPrice: "", stockLevel: "" });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Edit item state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editData, setEditData] = useState<{name: string, costPrice: string, sellingPrice: string}>({ name: "", costPrice: "", sellingPrice: "" });
 
   useEffect(() => {
     fetchItems();
@@ -64,12 +67,35 @@ export default function InventoryManager() {
     }
   };
 
-  const handleSell = async (item: InventoryItem) => {
+  const handleSell = async (item: InventoryItem, method: "Cash" | "UPI") => {
     try {
-      await sellInventoryItem(item, 1);
+      await sellInventoryItem(item, 1, method);
       fetchItems();
     } catch (err) {
       alert("Error selling item: " + (err as Error).message);
+    }
+  };
+
+  const startEdit = (item: InventoryItem) => {
+    setEditingId(item.id);
+    setEditData({
+      name: item.name,
+      costPrice: item.costPrice.toString(),
+      sellingPrice: item.sellingPrice.toString()
+    });
+  };
+
+  const saveEdit = async (id: string) => {
+    try {
+      await updateInventoryItem(id, {
+        name: editData.name,
+        costPrice: Number(editData.costPrice),
+        sellingPrice: Number(editData.sellingPrice)
+      });
+      setEditingId(null);
+      fetchItems();
+    } catch (err) {
+      alert("Error updating item: " + (err as Error).message);
     }
   };
 
@@ -170,23 +196,56 @@ export default function InventoryManager() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {items.map(item => {
-          const profitMargin = item.sellingPrice - item.costPrice;
+          const isEditing = editingId === item.id;
+          const displayCost = isEditing ? Number(editData.costPrice) : item.costPrice;
+          const displaySell = isEditing ? Number(editData.sellingPrice) : item.sellingPrice;
+          const profitMargin = displaySell - displayCost;
           const isLowStock = item.stockLevel < 5;
           
           return (
             <div key={item.id} className={`p-4 border ${isLowStock ? 'border-red-500/50 bg-red-950/10' : 'border-slate-800 bg-slate-900/50'} cyber-cut flex flex-col justify-between gap-4`}>
               <div>
                 <div className="flex justify-between items-start mb-2">
-                  <h4 className="font-bold text-white uppercase tracking-wider">{item.name}</h4>
-                  <span className="text-[9px] font-mono px-1.5 py-0.5 border border-slate-600 text-slate-400 uppercase">{item.category}</span>
+                  {isEditing ? (
+                    <input 
+                      type="text" 
+                      value={editData.name} 
+                      onChange={e => setEditData({...editData, name: e.target.value})}
+                      className="bg-black border border-emerald-500 text-white px-1 py-0.5 text-xs w-3/4 outline-none"
+                    />
+                  ) : (
+                    <h4 className="font-bold text-white uppercase tracking-wider truncate mr-2" title={item.name}>{item.name}</h4>
+                  )}
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 border border-slate-600 text-slate-400 uppercase shrink-0">{item.category}</span>
                 </div>
-                <div className="flex justify-between text-xs font-mono mb-1">
-                  <span className="text-slate-500">Cost: ₹{item.costPrice}</span>
-                  <span className="text-emerald-500 font-bold">Sell: ₹{item.sellingPrice}</span>
+                <div className="flex justify-between items-center text-xs font-mono mb-1 gap-2">
+                  <span className="text-slate-500 flex items-center gap-1">
+                    Cost: ₹
+                    {isEditing ? (
+                      <input type="number" value={editData.costPrice} onChange={e => setEditData({...editData, costPrice: e.target.value})} className="bg-black border border-emerald-500 w-12 px-1 text-white outline-none" />
+                    ) : (
+                      item.costPrice
+                    )}
+                  </span>
+                  <span className="text-emerald-500 font-bold flex items-center gap-1">
+                    Sell: ₹
+                    {isEditing ? (
+                      <input type="number" value={editData.sellingPrice} onChange={e => setEditData({...editData, sellingPrice: e.target.value})} className="bg-black border border-emerald-500 w-12 px-1 text-emerald-400 outline-none" />
+                    ) : (
+                      item.sellingPrice
+                    )}
+                  </span>
                 </div>
-                <div className="flex justify-between text-[10px] font-mono text-pink-400">
-                  <span>Profit: ₹{profitMargin}</span>
-                  <span>Margin: {Math.round((profitMargin/item.sellingPrice)*100) || 0}%</span>
+                <div className="flex justify-between items-center text-[10px] font-mono text-pink-400">
+                  <span>Profit: ₹{profitMargin || 0}</span>
+                  <div className="flex items-center gap-2">
+                    <span>Margin: {Math.round((profitMargin/displaySell)*100) || 0}%</span>
+                    {isEditing ? (
+                      <button onClick={() => saveEdit(item.id)} className="text-emerald-400 hover:text-white px-1 underline">Save</button>
+                    ) : (
+                      <button onClick={() => startEdit(item)} className="text-cyan-500 hover:text-white px-1 underline">Edit</button>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -197,13 +256,24 @@ export default function InventoryManager() {
                   <button onClick={() => handleUpdateStock(item, 1)} className="px-2 py-1 text-slate-400 hover:text-white hover:bg-slate-800"><Plus className="w-3 h-3" /></button>
                 </div>
                 
-                <button 
-                  onClick={() => handleSell(item)}
-                  disabled={item.stockLevel <= 0}
-                  className="px-3 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-black font-black uppercase text-[10px] tracking-widest cyber-cut disabled:opacity-50 flex items-center gap-1 transition-all"
-                >
-                  <ShoppingCart className="w-3 h-3" /> SELL (1)
-                </button>
+                <div className="flex gap-1">
+                  <button 
+                    onClick={() => handleSell(item, "Cash")}
+                    disabled={item.stockLevel <= 0 || isEditing}
+                    className="px-2 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase text-[10px] tracking-widest cyber-cut disabled:opacity-50 flex items-center gap-1 transition-all"
+                    title="Sell via Cash"
+                  >
+                    <ShoppingCart className="w-3 h-3" /> CASH
+                  </button>
+                  <button 
+                    onClick={() => handleSell(item, "UPI")}
+                    disabled={item.stockLevel <= 0 || isEditing}
+                    className="px-2 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-black uppercase text-[10px] tracking-widest cyber-cut disabled:opacity-50 flex items-center gap-1 transition-all"
+                    title="Sell via UPI"
+                  >
+                    UPI
+                  </button>
+                </div>
               </div>
             </div>
           );

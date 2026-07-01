@@ -173,7 +173,7 @@ export default function SortableStationCard({
           {onAssignWalkIn && (
             <button 
               className="flex-1 py-2 text-xs font-bold tracking-widest uppercase bg-yellow-950/20 border border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/20 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1"
-              disabled={station.status !== 'available'}
+              disabled={station.status === 'maintenance'}
               onClick={(e) => { e.stopPropagation(); onAssignWalkIn(station); }}
             >
               ASSIGN

@@ -1,16 +1,71 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { collection, onSnapshot, getDocs } from "firebase/firestore";
+import { collection, onSnapshot, getDocs, doc, updateDoc, writeBatch, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Booking, Station } from "@/types";
-import { History, Search, Filter } from "lucide-react";
+import { History, Search, Filter, Edit, Trash2, Save, X } from "lucide-react";
 
 export default function AdminPaymentHistory() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [stations, setStations] = useState<Station[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [methodFilter, setMethodFilter] = useState("all");
+  const [dateSort, setDateSort] = useState<"desc" | "asc">("desc");
+  
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editCost, setEditCost] = useState<number>(0);
+  const [editStatus, setEditStatus] = useState<string>("");
+  const [editMethod, setEditMethod] = useState<string>("");
+
+  const handleDelete = async (booking: Booking) => {
+    if (confirm("Are you sure you want to refund/void this payment record? This will log a refund in the financial ledger and mark it as voided.")) {
+      try {
+        const batch = writeBatch(db);
+        
+        // 1. Mark booking as refunded
+        batch.update(doc(db, "bookings", booking.id), { status: "refunded" });
+        
+        // 2. Log an expense for the refund so the ledger balances properly
+        if (booking.totalCost && booking.totalCost > 0) {
+          batch.set(doc(collection(db, "expenses")), {
+            amount: booking.totalCost,
+            category: "Refund",
+            note: `Refund/Void for booking: ${booking.userName || booking.id}`,
+            createdAt: Timestamp.now(),
+            createdBy: "admin"
+          });
+        }
+
+        await batch.commit();
+      } catch (err) {
+        console.error("Error refunding record:", err);
+        alert("Failed to refund record.");
+      }
+    }
+  };
+
+  const handleUpdate = async (id: string) => {
+    try {
+      await updateDoc(doc(db, "bookings", id), {
+        totalCost: editCost,
+        status: editStatus,
+        paymentMethod: editMethod
+      });
+      setEditingId(null);
+    } catch (err) {
+      console.error("Error updating record:", err);
+      alert("Failed to update record.");
+    }
+  };
+
+  const startEditing = (booking: Booking) => {
+    setEditingId(booking.id);
+    setEditCost(booking.totalCost || 0);
+    setEditStatus(booking.status);
+    setEditMethod(booking.paymentMethod || "UPI");
+  };
 
   useEffect(() => {
     // Fetch stations for mapping stationId to name
@@ -41,7 +96,7 @@ export default function AdminPaymentHistory() {
   }, []);
 
   const filteredBookings = useMemo(() => {
-    return bookings.filter(b => {
+    const filtered = bookings.filter(b => {
       // Filter out non-cost / pending slots
       const isValidStatus = ["completed", "active", "confirmed"].includes(b.status);
       const hasCost = b.totalCost !== undefined && b.totalCost > 0;
@@ -49,6 +104,11 @@ export default function AdminPaymentHistory() {
       if (!isValidStatus && !hasCost) return false;
 
       if (statusFilter !== "all" && b.status !== statusFilter) return false;
+      
+      if (methodFilter !== "all") {
+        const method = b.paymentMethod || "UPI"; // Default to UPI for legacy
+        if (method !== methodFilter) return false;
+      }
 
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
@@ -59,7 +119,13 @@ export default function AdminPaymentHistory() {
 
       return true;
     });
-  }, [bookings, searchQuery, statusFilter]);
+
+    if (dateSort === "asc") {
+      filtered.reverse(); // Since it's already sorted DESC, reversing makes it ASC
+    }
+
+    return filtered;
+  }, [bookings, searchQuery, statusFilter, methodFilter, dateSort]);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -80,17 +146,36 @@ export default function AdminPaymentHistory() {
             className="w-full bg-black border border-slate-700 text-yellow-500 pl-10 pr-4 py-2 text-sm font-mono focus:outline-none focus:border-yellow-500 transition-colors"
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Filter className="text-slate-500 w-4 h-4" />
           <select 
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="bg-black border border-slate-700 text-slate-300 py-2 px-3 text-sm font-mono focus:outline-none focus:border-yellow-500"
           >
-            <option value="all">ALL_STATUSES</option>
+            <option value="all">ALL_STATUS</option>
             <option value="completed">COMPLETED</option>
             <option value="active">ACTIVE</option>
             <option value="confirmed">CONFIRMED</option>
+          </select>
+
+          <select 
+            value={methodFilter}
+            onChange={(e) => setMethodFilter(e.target.value)}
+            className="bg-black border border-slate-700 text-slate-300 py-2 px-3 text-sm font-mono focus:outline-none focus:border-yellow-500"
+          >
+            <option value="all">ALL_METHODS</option>
+            <option value="Cash">CASH</option>
+            <option value="UPI">UPI</option>
+          </select>
+
+          <select 
+            value={dateSort}
+            onChange={(e) => setDateSort(e.target.value as "desc" | "asc")}
+            className="bg-black border border-slate-700 text-slate-300 py-2 px-3 text-sm font-mono focus:outline-none focus:border-yellow-500"
+          >
+            <option value="desc">NEWEST_FIRST</option>
+            <option value="asc">OLDEST_FIRST</option>
           </select>
         </div>
       </div>
@@ -107,12 +192,13 @@ export default function AdminPaymentHistory() {
                 <th className="py-4 px-4 font-bold whitespace-nowrap">Duration</th>
                 <th className="py-4 px-4 font-bold text-right whitespace-nowrap">Amount (₹)</th>
                 <th className="py-4 px-4 font-bold text-center whitespace-nowrap">Status / Mode</th>
+                <th className="py-4 px-4 font-bold text-right whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/50">
               {filteredBookings.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-500 font-mono text-sm">
+                  <td colSpan={8} className="py-12 text-center text-slate-500 font-mono text-sm">
                     NO_PAYMENT_RECORDS_FOUND
                   </td>
                 </tr>
@@ -162,22 +248,69 @@ export default function AdminPaymentHistory() {
                         {booking.durationMinutes || 0} min
                       </td>
                       <td className="py-3 px-4 text-right whitespace-nowrap">
-                        <span className="font-black text-emerald-400 tracking-wider">₹{booking.totalCost || 0}</span>
+                        {editingId === booking.id ? (
+                          <input 
+                            type="number" 
+                            value={editCost} 
+                            onChange={(e) => setEditCost(Number(e.target.value))}
+                            className="w-20 bg-slate-900 border border-slate-700 text-emerald-400 px-2 py-1 focus:outline-none"
+                          />
+                        ) : (
+                          <span className="font-black text-emerald-400 tracking-wider">₹{booking.totalCost || 0}</span>
+                        )}
                       </td>
                       <td className="py-3 px-4 text-center">
-                        <div className="flex flex-col items-center gap-1">
-                          <span className={`px-2 py-0.5 border text-[10px] font-black uppercase ${
-                            booking.status === "completed" ? "border-green-500/50 text-green-400 bg-green-950/20" :
-                            booking.status === "active" ? "border-cyan-500/50 text-cyan-400 bg-cyan-950/20" :
-                            booking.status === "confirmed" ? "border-yellow-500/50 text-yellow-400 bg-yellow-950/20" :
-                            "border-slate-500/50 text-slate-400 bg-slate-900/50"
-                          }`}>
-                            {booking.status}
-                          </span>
-                          <span className="text-[9px] text-slate-500 font-bold tracking-widest uppercase">
-                            {booking.paymentMethod || "UPI"}
-                          </span>
-                        </div>
+                        {editingId === booking.id ? (
+                          <div className="flex flex-col gap-1">
+                            <select value={editStatus} onChange={(e) => setEditStatus(e.target.value)} className="bg-slate-900 border border-slate-700 text-xs text-white p-1">
+                              <option value="completed">completed</option>
+                              <option value="active">active</option>
+                              <option value="confirmed">confirmed</option>
+                              <option value="pending_payment">pending_payment</option>
+                              <option value="failed">failed</option>
+                            </select>
+                            <input type="text" value={editMethod} onChange={(e) => setEditMethod(e.target.value)} className="bg-slate-900 border border-slate-700 text-xs text-white p-1" />
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center gap-1">
+                            <span className={`px-2 py-0.5 border text-[10px] font-black uppercase ${
+                              booking.status === "completed" ? "border-green-500/50 text-green-400 bg-green-950/20" :
+                              booking.status === "active" ? "border-cyan-500/50 text-cyan-400 bg-cyan-950/20" :
+                              booking.status === "confirmed" ? "border-yellow-500/50 text-yellow-400 bg-yellow-950/20" :
+                              "border-slate-500/50 text-slate-400 bg-slate-900/50"
+                            }`}>
+                              {booking.status}
+                            </span>
+                            <span className="text-[9px] text-slate-500 font-bold tracking-widest uppercase">
+                              {booking.paymentMethod || "UPI"}
+                            </span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        {editingId === booking.id ? (
+                          <div className="flex items-center justify-end gap-2">
+                            <button onClick={() => handleUpdate(booking.id)} className="p-1.5 bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-black transition-colors" title="Save">
+                              <Save className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => setEditingId(null)} className="p-1.5 bg-slate-800 text-slate-400 hover:bg-slate-700 transition-colors" title="Cancel">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => startEditing(booking)} className="p-1.5 bg-cyan-500/10 text-cyan-500 hover:bg-cyan-500 hover:text-black transition-colors" title="Edit">
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => handleDelete(booking)}
+                              className="p-2 bg-red-950/30 text-red-500 hover:bg-red-500 hover:text-white transition-colors"
+                              title="Refund / Void"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );

@@ -2,35 +2,7 @@ import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebaseAdmin";
 
-async function getPhonePeToken(): Promise<string> {
-  const tokenUrl = "https://api-preprod.phonepe.com/apis/pg-sandbox/v1/oauth/token";
-  const clientId = process.env.PHONEPE_CLIENT_ID || process.env.NEXT_PUBLIC_PHONEPE_CLIENT_ID || "";
-  const clientVersion = process.env.PHONEPE_CLIENT_VERSION || "1";
-  const clientSecret = process.env.PHONEPE_CLIENT_SECRET || "";
-
-  const params = new URLSearchParams();
-  params.append("client_id", clientId);
-  params.append("client_version", clientVersion);
-  params.append("client_secret", clientSecret);
-  params.append("grant_type", "client_credentials");
-
-  const response = await fetch(tokenUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: params.toString(),
-  });
-
-  const data = await response.json();
-  if (data.access_token) {
-    return data.access_token;
-  } else {
-    throw new Error(
-      data.error_description || data.error || "Failed to fetch PhonePe OAuth token"
-    );
-  }
-}
+import { getPhonePeToken } from "@/lib/phonepe";
 
 async function processPaymentStatus(
   orderId: string,
@@ -118,9 +90,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    const baseUrl =
-      process.env.PHONEPE_BASE_URL ||
-      "https://api-preprod.phonepe.com/apis/pg-sandbox";
+    const baseUrl = process.env.PHONEPE_BASE_URL || "";
+    if (!baseUrl) throw new Error("Missing PHONEPE_BASE_URL");
 
     // 1. Fetch OAuth Token
     const accessToken = await getPhonePeToken();
@@ -184,9 +155,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const baseUrl =
-      process.env.PHONEPE_BASE_URL ||
-      "https://api-preprod.phonepe.com/apis/pg-sandbox";
+    const baseUrl = process.env.PHONEPE_BASE_URL || "";
+    if (!baseUrl) throw new Error("Missing PHONEPE_BASE_URL");
 
     // 1. Fetch OAuth Token
     const accessToken = await getPhonePeToken();

@@ -2,35 +2,8 @@ import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb, adminAuth } from "@/lib/firebaseAdmin";
 
-async function getPhonePeToken(): Promise<string> {
-  const tokenUrl = "https://api-preprod.phonepe.com/apis/pg-sandbox/v1/oauth/token";
-  const clientId = process.env.PHONEPE_CLIENT_ID || process.env.NEXT_PUBLIC_PHONEPE_CLIENT_ID || "";
-  const clientVersion = process.env.PHONEPE_CLIENT_VERSION || "1";
-  const clientSecret = process.env.PHONEPE_CLIENT_SECRET || "";
-
-  const params = new URLSearchParams();
-  params.append("client_id", clientId);
-  params.append("client_version", clientVersion);
-  params.append("client_secret", clientSecret);
-  params.append("grant_type", "client_credentials");
-
-  const response = await fetch(tokenUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: params.toString(),
-  });
-
-  const data = await response.json();
-  if (data.access_token) {
-    return data.access_token;
-  } else {
-    throw new Error(
-      data.error_description || data.error || "Failed to fetch PhonePe OAuth token"
-    );
-  }
-}
+import { getPhonePeToken } from "@/lib/phonepe";
+import { randomBytes } from "crypto";
 
 export async function POST(request: Request) {
   try {
@@ -73,11 +46,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "Duration must be between 30 and 480 minutes." }, { status: 400 });
     }
 
-    const clientId = process.env.PHONEPE_CLIENT_ID || process.env.NEXT_PUBLIC_PHONEPE_CLIENT_ID || "";
+    const clientId = process.env.PHONEPE_CLIENT_ID || "";
     const clientSecret = process.env.PHONEPE_CLIENT_SECRET || "";
-    const baseUrl =
-      process.env.PHONEPE_BASE_URL ||
-      "https://api-preprod.phonepe.com/apis/pg-sandbox";
+    const baseUrl = process.env.PHONEPE_BASE_URL;
+
+    if (!baseUrl) {
+      return NextResponse.json(
+        { success: false, error: "PhonePe configuration is missing." },
+        { status: 500 }
+      );
+    }
 
     if (!clientId || !clientSecret) {
       return NextResponse.json(
@@ -151,9 +129,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const orderId = `ORD_${Date.now()}_${Math.random()
-      .toString(36)
-      .substring(2, 7)}`;
+    const orderId = `ORD_${randomBytes(16).toString('hex')}`;
 
     // 1. Create a pending_payment booking in Firestore via Admin SDK
     const bookingRef = adminDb.collection("bookings").doc(orderId);
@@ -227,7 +203,7 @@ export async function POST(request: Request) {
     const err = error as Error;
     console.error("Error in PhonePe initiate API route:", err);
     return NextResponse.json(
-      { success: false, error: err.message || "Internal Server Error" },
+      { success: false, error: "Internal Server Error" },
       { status: 500 }
     );
   }

@@ -27,6 +27,7 @@ export interface InventorySale {
   quantity: number;
   totalRevenue: number;
   totalProfit: number;
+  paymentMethod: "Cash" | "UPI";
   createdAt: Timestamp;
 }
 
@@ -53,7 +54,7 @@ export const updateInventoryItem = async (id: string, updates: Partial<Inventory
   await updateDoc(ref, updates);
 };
 
-export const sellInventoryItem = async (item: InventoryItem, quantity: number) => {
+export const sellInventoryItem = async (item: InventoryItem, quantity: number, paymentMethod: "Cash" | "UPI" = "Cash") => {
   if (item.stockLevel < quantity) {
     throw new Error("Not enough stock available");
   }
@@ -77,6 +78,7 @@ export const sellInventoryItem = async (item: InventoryItem, quantity: number) =
     quantity,
     totalRevenue: revenue,
     totalProfit: profit,
+    paymentMethod,
     createdAt: Timestamp.now()
   });
 

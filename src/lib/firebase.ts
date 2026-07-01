@@ -4,13 +4,13 @@ import { getFunctions } from "firebase/functions";
 import { getAuth, browserLocalPersistence, setPersistence } from "firebase/auth";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAhy7uJOYziSdlZA1YzBsE_58bZ6U95beo",
-  authDomain: "gamezone-vibe.firebaseapp.com",
-  projectId: "gamezone-vibe",
-  storageBucket: "gamezone-vibe.firebasestorage.app",
-  messagingSenderId: "205564322866",
-  appId: "1:205564322866:web:a6d8ec64cac112b91b482b",
-  measurementId: "G-2HP4KREG9F"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "",
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || ""
 };
 
 // Initialize Firebase

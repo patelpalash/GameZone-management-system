@@ -60,6 +60,8 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
   const [closures, setClosures] = useState<any[]>([]);
   const [shopOpenTime, setShopOpenTime] = useState("09:00");
   const [shopCloseTime, setShopCloseTime] = useState("23:00");
+  const [weekendOpenTime, setWeekendOpenTime] = useState("09:00");
+  const [weekendCloseTime, setWeekendCloseTime] = useState("23:00");
 
   // UI selection helper states
   const [customTimeActive, setCustomTimeActive] = useState(false);
@@ -173,6 +175,8 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
         const data = docSnap.data();
         if (data.openTime) setShopOpenTime(data.openTime);
         if (data.closeTime) setShopCloseTime(data.closeTime);
+        if (data.weekendOpenTime) setWeekendOpenTime(data.weekendOpenTime);
+        if (data.weekendCloseTime) setWeekendCloseTime(data.weekendCloseTime);
       }
     });
 
@@ -265,9 +269,10 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
     const todayStr = format(new Date(), "yyyy-MM-dd");
     const prebookStr = format(prebookDate, "yyyy-MM-dd");
     const isToday = prebookStr === todayStr;
+    const isWeekend = prebookDate.getDay() === 0 || prebookDate.getDay() === 6;
     
-    const [openH, openM] = shopOpenTime.split(":").map(Number);
-    const [closeH, closeM] = shopCloseTime.split(":").map(Number);
+    const [openH, openM] = (isWeekend ? weekendOpenTime : shopOpenTime).split(":").map(Number);
+    const [closeH, closeM] = (isWeekend ? weekendCloseTime : shopCloseTime).split(":").map(Number);
     
     let startHour = openH;
     let startMinute = openM;
@@ -315,7 +320,7 @@ export default function BookingModal({ station, isOpen, onClose }: BookingModalP
     }
     
     return slots;
-  }, [prebookDate, shopOpenTime, shopCloseTime]);
+  }, [prebookDate, shopOpenTime, shopCloseTime, weekendOpenTime, weekendCloseTime]);
 
   // Filter bookings for the selected prebookDate
   const bookingsForSelectedDate = useMemo(() => {
