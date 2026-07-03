@@ -18,8 +18,14 @@ export default function AdminPaymentHistory() {
   const [editCost, setEditCost] = useState<number>(0);
   const [editStatus, setEditStatus] = useState<string>("");
   const [editMethod, setEditMethod] = useState<string>("");
+  const [editSplitCash, setEditSplitCash] = useState<number>(0);
+  const [editSplitOnline, setEditSplitOnline] = useState<number>(0);
 
   const handleDelete = async (booking: Booking) => {
+    if (booking.status === "refunded") {
+      alert("This booking has already been refunded.");
+      return;
+    }
     if (confirm("Are you sure you want to refund/void this payment record? This will log a refund in the financial ledger and mark it as voided.")) {
       try {
         const batch = writeBatch(db);
@@ -51,7 +57,14 @@ export default function AdminPaymentHistory() {
       await updateDoc(doc(db, "bookings", id), {
         totalCost: editCost,
         status: editStatus,
-        paymentMethod: editMethod
+        paymentMethod: editMethod,
+        ...(editMethod === "Split" ? {
+          splitCash: editSplitCash,
+          splitOnline: editSplitOnline
+        } : {
+          splitCash: null,
+          splitOnline: null
+        })
       });
       setEditingId(null);
     } catch (err) {
@@ -65,6 +78,14 @@ export default function AdminPaymentHistory() {
     setEditCost(booking.totalCost || 0);
     setEditStatus(booking.status);
     setEditMethod(booking.paymentMethod || "UPI");
+    if (booking.paymentMethod === "Split") {
+      setEditSplitCash(booking.splitCash || 0);
+      setEditSplitOnline(booking.splitOnline || 0);
+    } else {
+      const half = Math.floor((booking.totalCost || 0) / 2);
+      setEditSplitCash(half);
+      setEditSplitOnline((booking.totalCost || 0) - half);
+    }
   };
 
   useEffect(() => {
@@ -269,7 +290,34 @@ export default function AdminPaymentHistory() {
                               <option value="pending_payment">pending_payment</option>
                               <option value="failed">failed</option>
                             </select>
-                            <input type="text" value={editMethod} onChange={(e) => setEditMethod(e.target.value)} className="bg-slate-900 border border-slate-700 text-xs text-white p-1" />
+                            <select value={editMethod} onChange={(e) => {
+                               setEditMethod(e.target.value);
+                               if (e.target.value === "Split") {
+                                 const half = Math.floor(editCost / 2);
+                                 setEditSplitCash(half);
+                                 setEditSplitOnline(editCost - half);
+                               }
+                            }} className="bg-slate-900 border border-slate-700 text-xs text-white p-1">
+                              <option value="Cash">Cash</option>
+                              <option value="Online">Online</option>
+                              <option value="UPI">UPI</option>
+                              <option value="Card">Card</option>
+                              <option value="Split">Split (Cash+Online)</option>
+                            </select>
+                            {editMethod === "Split" && (
+                              <div className="flex gap-1 mt-1 justify-center">
+                                <input type="number" title="Cash Amount" value={editSplitCash} onChange={e => {
+                                  const v = Number(e.target.value);
+                                  setEditSplitCash(v);
+                                  setEditSplitOnline(Math.max(0, editCost - v));
+                                }} className="w-14 bg-slate-900 border border-yellow-500/50 text-yellow-400 p-1 text-[10px] focus:outline-none" />
+                                <input type="number" title="Online Amount" value={editSplitOnline} onChange={e => {
+                                  const v = Number(e.target.value);
+                                  setEditSplitOnline(v);
+                                  setEditSplitCash(Math.max(0, editCost - v));
+                                }} className="w-14 bg-slate-900 border border-cyan-500/50 text-cyan-400 p-1 text-[10px] focus:outline-none" />
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className="flex flex-col items-center gap-1">
@@ -281,8 +329,12 @@ export default function AdminPaymentHistory() {
                             }`}>
                               {booking.status}
                             </span>
-                            <span className="text-[9px] text-slate-500 font-bold tracking-widest uppercase">
-                              {booking.paymentMethod || "UPI"}
+                            <span className="text-[9px] text-slate-500 font-bold tracking-widest uppercase text-center">
+                              {booking.paymentMethod === "Split" ? (
+                                <>SPLIT<br/><span className="text-yellow-500">₹{booking.splitCash || 0}</span> / <span className="text-cyan-500">₹{booking.splitOnline || 0}</span></>
+                              ) : (
+                                booking.paymentMethod || "UPI"
+                              )}
                             </span>
                           </div>
                         )}

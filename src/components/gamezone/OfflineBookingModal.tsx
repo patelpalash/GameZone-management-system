@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Station, Booking } from "@/types";
 import { Loader2, AlertTriangle, User, UserPlus, Phone, Calendar as CalendarIcon, Clock } from "lucide-react";
-import { writeBatch, doc, Timestamp, collection, query, onSnapshot, setDoc } from "firebase/firestore";
+import { writeBatch, doc, Timestamp, collection, query, onSnapshot, setDoc, getDocs, orderBy, limit } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { DayPicker } from "react-day-picker";
@@ -35,9 +35,19 @@ const DURATIONS = [
 export default function OfflineBookingModal({ station, isOpen, onClose, stationBookings = [] }: OfflineBookingModalProps) {
   const { user } = useAuth();
   const [selectedDuration, setSelectedDuration] = useState<number>(60);
-  const [paymentMode, setPaymentMode] = useState<"Cash" | "Online">("Cash");
+  const [paymentMode, setPaymentMode] = useState<"Cash" | "Online" | "Split">("Cash");
+  const [splitCash, setSplitCash] = useState<string>("");
+  const [splitOnline, setSplitOnline] = useState<string>("");
+  const [hasManuallySplit, setHasManuallySplit] = useState(false);
   const [guestName, setGuestName] = useState("Walk-in Guest");
   const [phone, setPhone] = useState("");
+  
+  // Autocomplete state
+  interface CustomerInfo { name: string; phone: string; }
+  const [knownCustomers, setKnownCustomers] = useState<CustomerInfo[]>([]);
+  const [showNameDropdown, setShowNameDropdown] = useState(false);
+  const [showPhoneDropdown, setShowPhoneDropdown] = useState(false);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,7 +65,7 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
   const [extraControllerPrice, setExtraControllerPrice] = useState(50);
 
   const [extraControllers, setExtraControllers] = useState(0);
-  const [customTotalAmount, setCustomTotalAmount] = useState<string>("");
+  const [customTotalAmount, setCustomTotalAmount] = useState<string | null>(null);
   const [localControllerPrice, setLocalControllerPrice] = useState<string>("50");
 
   // Fetch closures and shop hours
@@ -70,6 +80,31 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
       });
       setClosures(list);
     });
+
+    const fetchCustomers = async () => {
+      try {
+        const cMap = new Map<string, CustomerInfo>();
+        const usersSnap = await getDocs(collection(db, "users"));
+        usersSnap.forEach(docSnap => {
+          const data = docSnap.data();
+          if (data.phone) cMap.set(data.phone, { name: data.name || "", phone: data.phone });
+        });
+        
+        const bookingsQ = query(collection(db, "bookings"), orderBy("createdAt", "desc"), limit(200));
+        const bookingsSnap = await getDocs(bookingsQ);
+        bookingsSnap.forEach(docSnap => {
+          const data = docSnap.data();
+          if (data.userPhone && !cMap.has(data.userPhone)) {
+            cMap.set(data.userPhone, { name: data.userName || "", phone: data.userPhone });
+          }
+        });
+        
+        setKnownCustomers(Array.from(cMap.values()));
+      } catch (err) {
+        console.error("Failed to fetch customers:", err);
+      }
+    };
+    fetchCustomers();
 
     const hoursUnsub = onSnapshot(doc(db, "settings", "shop_hours"), (docSnap) => {
       if (docSnap.exists()) {
@@ -109,9 +144,19 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
       setPrebookDate(new Date(new Date().setHours(0, 0, 0, 0)));
       setPrebookTime("");
       setExtraControllers(0);
-      setCustomTotalAmount("");
+      setCustomTotalAmount(null);
     }
   }, [isOpen]);
+
+  const filteredByName = useMemo(() => {
+    if (!guestName || guestName === "Walk-in Guest") return [];
+    return knownCustomers.filter(c => c.name.toLowerCase().includes(guestName.toLowerCase())).slice(0, 5);
+  }, [guestName, knownCustomers]);
+
+  const filteredByPhone = useMemo(() => {
+    if (!phone) return [];
+    return knownCustomers.filter(c => c.phone.includes(phone)).slice(0, 5);
+  }, [phone, knownCustomers]);
 
   // Generate dynamic half-hourly time slots matching user side logic
   const timeSlots = useMemo(() => {
@@ -253,10 +298,21 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
   }, [isPrebook, timeSlots, prebookTime, isSlotConflicted]);
 
 
-  if (!station) return null;
+  // Move calculations above early return to obey rules of hooks
+  const calculatedTotalCost = station ? ((station.pricePerHour / 60) * selectedDuration + (extraControllers * extraControllerPrice)) : 0;
+  const finalTotalCost = customTotalAmount !== null ? (customTotalAmount === "" ? 0 : Number(customTotalAmount)) : calculatedTotalCost;
 
-  const calculatedTotalCost = (station.pricePerHour / 60) * selectedDuration + (extraControllers * extraControllerPrice);
-  const finalTotalCost = customTotalAmount !== "" ? Number(customTotalAmount) : calculatedTotalCost;
+  useEffect(() => {
+    if (paymentMode === "Split" && !hasManuallySplit) {
+      const half = Math.floor(finalTotalCost / 2);
+      setSplitCash(half.toString());
+      setSplitOnline((finalTotalCost - half).toString());
+    } else if (paymentMode !== "Split") {
+      setHasManuallySplit(false);
+    }
+  }, [finalTotalCost, paymentMode, hasManuallySplit]);
+
+  if (!station) return null;
 
   const conflictError = (() => {
     let start: Date;
@@ -356,6 +412,15 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
       return;
     }
 
+    if (paymentMode === "Split") {
+      const cash = Number(splitCash) || 0;
+      const online = Number(splitOnline) || 0;
+      if (cash < 0 || online < 0 || Math.abs(cash + online - finalTotalCost) > 0.01) {
+        setError("Split amounts must be positive and exactly equal the total amount.");
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     setError(null);
     try {
@@ -383,8 +448,12 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
         totalCost: Number(finalTotalCost.toFixed(2)),
         extraControllers: extraControllers,
         status: isPrebook ? "confirmed" : "active",
-        transactionId: paymentMode === "Cash" ? "OFFLINE_CASH" : "OFFLINE_ONLINE",
+        transactionId: paymentMode === "Cash" ? "OFFLINE_CASH" : paymentMode === "Online" ? "OFFLINE_ONLINE" : "OFFLINE_SPLIT",
         paymentMethod: paymentMode,
+        ...(paymentMode === "Split" ? {
+          splitCash: Number(splitCash) || 0,
+          splitOnline: Number(splitOnline) || 0,
+        } : {}),
         startTime: isPrebook ? null : Timestamp.fromDate(start),
         endTime: isPrebook ? null : Timestamp.fromDate(endTime),
         isPrebook: isPrebook,
@@ -434,21 +503,42 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
         <div className="p-6 space-y-6 bg-black/90 relative z-10 overflow-y-auto">
           
           {/* Guest Name Input */}
-          <div className="space-y-2">
+          <div className="space-y-2 relative">
             <label className="text-xs text-yellow-500 uppercase tracking-[0.2em] font-bold flex items-center gap-2">
               <User className="w-4 h-4" /> Guest Name (Optional)
             </label>
             <input
               type="text"
               value={guestName}
-              onChange={(e) => setGuestName(e.target.value)}
+              onChange={(e) => { setGuestName(e.target.value); setShowNameDropdown(true); }}
+              onFocus={() => setShowNameDropdown(true)}
+              onBlur={() => setTimeout(() => setShowNameDropdown(false), 200)}
               placeholder="e.g. John Doe"
               className="w-full bg-slate-900 border border-slate-700 text-white p-3 font-mono text-sm focus:border-yellow-500 focus:outline-none placeholder:text-slate-600 transition-colors"
             />
+            {showNameDropdown && filteredByName.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-slate-950 border border-yellow-500/50 shadow-xl z-50 max-h-48 overflow-y-auto cyber-cut">
+                {filteredByName.map(c => (
+                  <div 
+                    key={c.phone} 
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      setGuestName(c.name);
+                      setPhone(c.phone);
+                      setShowNameDropdown(false);
+                    }}
+                    className="p-3 hover:bg-yellow-500/20 cursor-pointer flex justify-between items-center border-b border-slate-800 last:border-0 transition-colors"
+                  >
+                    <span className="font-bold text-white text-sm">{c.name}</span>
+                    <span className="font-mono text-xs text-yellow-500/70">{c.phone}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Customer Phone Input */}
-          <div className="space-y-2">
+          <div className="space-y-2 relative">
             <label className="text-xs text-yellow-500 uppercase tracking-[0.2em] font-bold flex items-center gap-2">
               <Phone className="w-4 h-4" /> Customer Phone Number (Mandatory)
             </label>
@@ -457,10 +547,31 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
               required
               pattern="[0-9]{10}"
               value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, '').slice(0, 10))}
+              onChange={(e) => { setPhone(e.target.value.replace(/\D/g, '').slice(0,10)); setShowPhoneDropdown(true); }}
+              onFocus={() => setShowPhoneDropdown(true)}
+              onBlur={() => setTimeout(() => setShowPhoneDropdown(false), 200)}
               placeholder="10-digit mobile number"
               className="w-full bg-slate-900 border border-slate-700 text-white p-3 font-mono text-sm focus:border-yellow-500 focus:outline-none placeholder:text-slate-600 transition-colors"
             />
+            {showPhoneDropdown && filteredByPhone.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-slate-950 border border-yellow-500/50 shadow-xl z-50 max-h-48 overflow-y-auto cyber-cut">
+                {filteredByPhone.map(c => (
+                  <div 
+                    key={c.phone} 
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      setGuestName(c.name);
+                      setPhone(c.phone);
+                      setShowPhoneDropdown(false);
+                    }}
+                    className="p-3 hover:bg-yellow-500/20 cursor-pointer flex justify-between items-center border-b border-slate-800 last:border-0 transition-colors"
+                  >
+                    <span className="font-mono text-yellow-500 text-sm">{c.phone}</span>
+                    <span className="font-bold text-xs text-white">{c.name}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Assign Mode Toggles */}
@@ -585,7 +696,7 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
                   key={dur.minutes}
                   onClick={() => {
                     setSelectedDuration(dur.minutes);
-                    setCustomTotalAmount(""); // Reset custom amount on duration change
+                    setCustomTotalAmount(null); // Reset custom amount on duration change
                   }}
                   className={`
                     px-4 py-2 text-sm font-bold tracking-widest cyber-cut-reverse transition-all uppercase
@@ -601,30 +712,85 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
           </div>
 
           {/* Payment Mode Selector */}
-          <div>
-            <p className="text-xs text-yellow-500 mb-2 uppercase tracking-[0.2em] font-bold">PAYMENT_MODE</p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setPaymentMode("Cash")}
-                className={`flex-1 py-3 text-sm font-black tracking-widest cyber-cut uppercase transition-colors border ${
-                  paymentMode === "Cash" 
-                    ? "bg-yellow-500/20 text-yellow-400 border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.2)]" 
-                    : "bg-slate-900 border-slate-700 text-slate-500 hover:text-yellow-400 hover:border-yellow-400/50"
-                }`}
-              >
-                CASH
-              </button>
-              <button
-                onClick={() => setPaymentMode("Online")}
-                className={`flex-1 py-3 text-sm font-black tracking-widest cyber-cut uppercase transition-colors border ${
-                  paymentMode === "Online" 
-                    ? "bg-cyan-500/20 text-cyan-400 border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.2)]" 
-                    : "bg-slate-900 border-slate-700 text-slate-500 hover:text-cyan-400 hover:border-cyan-500/50"
-                }`}
-              >
-                ONLINE (UPI)
-              </button>
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs text-yellow-500 mb-2 uppercase tracking-[0.2em] font-bold">PAYMENT_MODE</p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button
+                  onClick={() => setPaymentMode("Cash")}
+                  className={`flex-1 py-3 text-xs sm:text-sm font-black tracking-widest cyber-cut uppercase transition-colors border ${
+                    paymentMode === "Cash" 
+                      ? "bg-yellow-500/20 text-yellow-400 border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.2)]" 
+                      : "bg-slate-900 border-slate-700 text-slate-500 hover:text-yellow-400 hover:border-yellow-400/50"
+                  }`}
+                >
+                  CASH
+                </button>
+                <button
+                  onClick={() => setPaymentMode("Online")}
+                  className={`flex-1 py-3 text-xs sm:text-sm font-black tracking-widest cyber-cut uppercase transition-colors border ${
+                    paymentMode === "Online" 
+                      ? "bg-cyan-500/20 text-cyan-400 border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.2)]" 
+                      : "bg-slate-900 border-slate-700 text-slate-500 hover:text-cyan-400 hover:border-cyan-500/50"
+                  }`}
+                >
+                  ONLINE (UPI)
+                </button>
+                <button
+                  onClick={() => setPaymentMode("Split")}
+                  className={`flex-1 py-3 text-xs sm:text-sm font-black tracking-widest cyber-cut uppercase transition-colors border ${
+                    paymentMode === "Split" 
+                      ? "bg-emerald-500/20 text-emerald-400 border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.2)]" 
+                      : "bg-slate-900 border-slate-700 text-slate-500 hover:text-emerald-400 hover:border-emerald-500/50"
+                  }`}
+                >
+                  SPLIT
+                </button>
+              </div>
             </div>
+
+            {paymentMode === "Split" && (
+              <div className="flex gap-4 p-4 border border-emerald-500/30 bg-emerald-950/10 cyber-cut animate-fade-in">
+                <div className="flex-1 space-y-1">
+                  <label className="text-[10px] text-yellow-500 font-bold uppercase tracking-widest">CASH AMOUNT (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max={finalTotalCost}
+                    value={splitCash}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSplitCash(val);
+                      setHasManuallySplit(true);
+                      const numVal = Number(val);
+                      if (!isNaN(numVal)) {
+                        setSplitOnline(Math.max(0, finalTotalCost - numVal).toString());
+                      }
+                    }}
+                    className="w-full bg-black border border-emerald-500/50 text-xl font-black text-yellow-400 p-2 focus:outline-none focus:border-yellow-400"
+                  />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <label className="text-[10px] text-cyan-500 font-bold uppercase tracking-widest">ONLINE AMOUNT (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max={finalTotalCost}
+                    value={splitOnline}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSplitOnline(val);
+                      setHasManuallySplit(true);
+                      const numVal = Number(val);
+                      if (!isNaN(numVal)) {
+                        setSplitCash(Math.max(0, finalTotalCost - numVal).toString());
+                      }
+                    }}
+                    className="w-full bg-black border border-emerald-500/50 text-xl font-black text-cyan-400 p-2 focus:outline-none focus:border-cyan-400"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Error Display */}
@@ -676,7 +842,7 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
                   onClick={() => {
                     if (extraControllers > 0) {
                       setExtraControllers(prev => prev - 1);
-                      setCustomTotalAmount("");
+                      setCustomTotalAmount(null);
                     }
                   }}
                   className="w-10 h-10 flex items-center justify-center bg-black border border-slate-600 text-yellow-500 hover:bg-slate-800 disabled:opacity-50 font-bold"
@@ -688,7 +854,7 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
                 <button
                   onClick={() => {
                     setExtraControllers(prev => prev + 1);
-                    setCustomTotalAmount("");
+                    setCustomTotalAmount(null);
                   }}
                   className="w-10 h-10 flex items-center justify-center bg-black border border-slate-600 text-yellow-500 hover:bg-slate-800 font-bold"
                 >
@@ -702,14 +868,21 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
           <div className="p-6 border border-yellow-500/30 bg-yellow-950/20 cyber-cut-reverse flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="space-y-2 flex-1 w-full">
               <label className="text-xs text-yellow-500 uppercase tracking-[0.2em] font-bold">TOTAL_AMOUNT (₹)</label>
-              <input
-                type="number"
-                min="0"
-                value={customTotalAmount !== "" ? customTotalAmount : calculatedTotalCost.toFixed(2)}
-                onChange={(e) => setCustomTotalAmount(e.target.value)}
-                className="w-full bg-black border border-yellow-500/50 text-5xl font-black text-yellow-400 p-2 focus:outline-none focus:border-yellow-400 drop-shadow-[0_0_10px_rgba(252,238,10,0.2)]"
-              />
-              {customTotalAmount !== "" && (
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  value={customTotalAmount !== null ? customTotalAmount : calculatedTotalCost.toFixed(2)}
+                  onChange={(e) => setCustomTotalAmount(e.target.value)}
+                  className="w-full bg-black border border-yellow-500/50 text-5xl font-black text-yellow-400 p-2 focus:outline-none focus:border-yellow-400 drop-shadow-[0_0_10px_rgba(252,238,10,0.2)]"
+                />
+                {customTotalAmount !== null && (
+                  <button onClick={() => setCustomTotalAmount(null)} className="shrink-0 px-4 bg-red-950/40 text-red-500 hover:bg-red-500/20 border border-red-500/50 font-mono text-xs font-bold uppercase tracking-widest cyber-cut-reverse transition-all">
+                    Reset
+                  </button>
+                )}
+              </div>
+              {customTotalAmount !== null && (
                 <p className="text-xs text-cyan-400 font-mono italic">Custom price override active</p>
               )}
             </div>

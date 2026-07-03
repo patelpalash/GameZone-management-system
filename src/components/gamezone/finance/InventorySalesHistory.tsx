@@ -2,13 +2,16 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { InventorySale, InventoryItem } from "@/lib/financeApi";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, onSnapshot, doc, writeBatch, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { TrendingUp, AlertCircle, PackageX, ShoppingCart, ArrowUpDown } from "lucide-react";
+import { TrendingUp, AlertCircle, PackageX, ShoppingCart, ArrowUpDown, DollarSign, Edit, Trash2, Save, X } from "lucide-react";
 
 export default function InventorySalesHistory({ sales }: { sales: InventorySale[] }) {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [sortConfig, setSortConfig] = useState<{ key: keyof InventorySale | 'date', direction: 'asc' | 'desc' } | null>({ key: 'date', direction: 'desc' });
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editMethod, setEditMethod] = useState<string>("");
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "inventory"), (snap) => {
@@ -20,7 +23,7 @@ export default function InventorySalesHistory({ sales }: { sales: InventorySale[
   }, []);
 
   // Calculate KPIs
-  const { mostSelling, mostProfitable, outOfStock, lowStock } = useMemo(() => {
+  const { mostSelling, mostProfitable, outOfStock, lowStock, totalRevenue, totalProfit } = useMemo(() => {
     let outOfStock = 0;
     let lowStock = 0;
     items.forEach(item => {
@@ -28,8 +31,14 @@ export default function InventorySalesHistory({ sales }: { sales: InventorySale[
       else if (item.stockLevel <= 5) lowStock++;
     });
 
+    let totalRev = 0;
+    let totalProf = 0;
+
     const itemStats: Record<string, { qty: number, profit: number, name: string }> = {};
     sales.forEach(sale => {
+      totalRev += sale.totalRevenue;
+      totalProf += sale.totalProfit;
+
       if (!itemStats[sale.itemId]) itemStats[sale.itemId] = { qty: 0, profit: 0, name: sale.itemName };
       itemStats[sale.itemId].qty += sale.quantity;
       itemStats[sale.itemId].profit += sale.totalProfit;
@@ -47,7 +56,7 @@ export default function InventorySalesHistory({ sales }: { sales: InventorySale[
       }
     });
 
-    return { mostSelling: bestSeller, mostProfitable: bestProfit, outOfStock, lowStock };
+    return { mostSelling: bestSeller, mostProfitable: bestProfit, outOfStock, lowStock, totalRevenue: totalRev, totalProfit: totalProf };
   }, [sales, items]);
 
   const sortedSales = useMemo(() => {
@@ -82,10 +91,49 @@ export default function InventorySalesHistory({ sales }: { sales: InventorySale[
     setSortConfig({ key, direction });
   };
 
+  const handleSaveEdit = async (saleId: string) => {
+    try {
+      await updateDoc(doc(db, "inventory_sales", saleId), { paymentMethod: editMethod });
+      setEditingId(null);
+    } catch (err) {
+      console.error("Error updating sale:", err);
+      alert("Failed to update sale.");
+    }
+  };
+
+  const handleDelete = async (sale: InventorySale) => {
+    if (confirm(`Are you sure you want to delete this sale of ${sale.quantity}x ${sale.itemName}? This will restore the stock quantity and remove the revenue from the ledger.`)) {
+      try {
+        const batch = writeBatch(db);
+        batch.delete(doc(db, "inventory_sales", sale.id!));
+        
+        // Restore inventory stock
+        const item = items.find(i => i.id === sale.itemId);
+        if (item) {
+          batch.update(doc(db, "inventory", item.id), {
+            stockLevel: item.stockLevel + sale.quantity
+          });
+        }
+        await batch.commit();
+      } catch (err) {
+        console.error("Error deleting sale:", err);
+        alert("Failed to delete sale.");
+      }
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="p-4 border border-slate-800 bg-slate-900/50 cyber-cut flex flex-col gap-2 hover:border-emerald-500/50 transition-colors">
+          <div className="flex items-center gap-2 text-emerald-500 font-bold text-xs uppercase tracking-widest"><DollarSign className="w-4 h-4"/> Total_Rev</div>
+          <div className="text-xl font-black text-white">₹{totalRevenue.toLocaleString()}</div>
+        </div>
+        <div className="p-4 border border-slate-800 bg-slate-900/50 cyber-cut flex flex-col gap-2 hover:border-emerald-500/50 transition-colors">
+          <div className="flex items-center gap-2 text-emerald-500 font-bold text-xs uppercase tracking-widest"><TrendingUp className="w-4 h-4"/> Total_Profit</div>
+          <div className="text-xl font-black text-white">₹{totalProfit.toLocaleString()}</div>
+        </div>
         <div className="p-4 border border-slate-800 bg-slate-900/50 cyber-cut flex flex-col gap-2 hover:border-cyan-500/50 transition-colors">
           <div className="flex items-center gap-2 text-cyan-500 font-bold text-xs uppercase tracking-widest"><ShoppingCart className="w-4 h-4"/> Most_Selling</div>
           <div className="text-xl font-black text-white">{mostSelling.name} <span className="text-sm text-cyan-500 font-mono">({mostSelling.qty}x)</span></div>
@@ -132,12 +180,13 @@ export default function InventorySalesHistory({ sales }: { sales: InventorySale[
                 <th className="p-4 cursor-pointer hover:text-cyan-400 transition-colors" onClick={() => requestSort('paymentMethod')}>
                   <div className="flex items-center gap-1">Method <ArrowUpDown className="w-3 h-3"/></div>
                 </th>
+                <th className="p-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {sortedSales.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-slate-500 font-mono text-xs uppercase">No sales history found for this period.</td>
+                  <td colSpan={7} className="p-8 text-center text-slate-500 font-mono text-xs uppercase">No sales history found for this period.</td>
                 </tr>
               ) : (
                 sortedSales.map((sale) => (
@@ -148,9 +197,33 @@ export default function InventorySalesHistory({ sales }: { sales: InventorySale[
                     <td className="p-4 font-mono text-emerald-400">₹{sale.totalRevenue}</td>
                     <td className="p-4 font-mono text-emerald-500">₹{sale.totalProfit}</td>
                     <td className="p-4">
-                      <span className={`px-2 py-1 text-[10px] font-bold tracking-widest uppercase rounded border ${sale.paymentMethod === 'UPI' ? 'border-purple-500 text-purple-400 bg-purple-500/10' : 'border-yellow-500 text-yellow-400 bg-yellow-500/10'}`}>
-                        {sale.paymentMethod}
-                      </span>
+                      {editingId === sale.id ? (
+                        <select 
+                          value={editMethod} 
+                          onChange={(e) => setEditMethod(e.target.value)} 
+                          className="bg-slate-900 border border-slate-700 text-xs text-white p-1 focus:outline-none focus:border-cyan-500"
+                        >
+                          <option value="Cash">Cash</option>
+                          <option value="UPI">Online (UPI)</option>
+                        </select>
+                      ) : (
+                        <span className={`px-2 py-1 text-[10px] font-bold tracking-widest uppercase rounded border ${sale.paymentMethod === 'UPI' ? 'border-purple-500 text-purple-400 bg-purple-500/10' : 'border-yellow-500 text-yellow-400 bg-yellow-500/10'}`}>
+                          {sale.paymentMethod}
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-4 text-right flex items-center justify-end gap-2">
+                      {editingId === sale.id ? (
+                        <>
+                          <button onClick={() => handleSaveEdit(sale.id!)} className="p-1.5 text-emerald-500 hover:bg-emerald-500/20 rounded transition-colors" title="Save"><Save className="w-4 h-4"/></button>
+                          <button onClick={() => setEditingId(null)} className="p-1.5 text-slate-400 hover:bg-slate-800 rounded transition-colors" title="Cancel"><X className="w-4 h-4"/></button>
+                        </>
+                      ) : (
+                        <>
+                          <button onClick={() => { setEditingId(sale.id!); setEditMethod(sale.paymentMethod); }} className="p-1.5 text-cyan-500 hover:bg-cyan-500/20 rounded transition-colors" title="Edit Method"><Edit className="w-4 h-4"/></button>
+                          <button onClick={() => handleDelete(sale)} className="p-1.5 text-red-500 hover:bg-red-500/20 rounded transition-colors" title="Delete Sale"><Trash2 className="w-4 h-4"/></button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))

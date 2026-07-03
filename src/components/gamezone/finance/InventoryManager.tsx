@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Minus, PackagePlus, ShoppingCart, Loader2 } from "lucide-react";
+import { Plus, Minus, PackagePlus, ShoppingCart, Loader2, History } from "lucide-react";
 import { InventoryItem, addInventoryItem, getInventoryItems, sellInventoryItem, updateInventoryItem } from "@/lib/financeApi";
 
-export default function InventoryManager() {
+export default function InventoryManager({ onGoToHistory }: { onGoToHistory?: () => void }) {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -107,12 +107,22 @@ export default function InventoryManager() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-black tracking-widest text-emerald-500 uppercase">Inventory & Sales</h3>
-        <button 
-          onClick={() => setShowAddForm(!showAddForm)}
-          className="px-3 py-1.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500 hover:bg-emerald-500 hover:text-black font-black uppercase text-xs tracking-widest cyber-cut transition-all flex items-center gap-2"
-        >
-          <PackagePlus className="w-4 h-4" /> ADD_ITEM
-        </button>
+        <div className="flex gap-2">
+          {onGoToHistory && (
+            <button 
+              onClick={onGoToHistory}
+              className="px-3 py-1.5 bg-cyan-500/20 text-cyan-400 border border-cyan-500 hover:bg-cyan-500 hover:text-black font-black uppercase text-xs tracking-widest cyber-cut transition-all flex items-center gap-2"
+            >
+              <History className="w-4 h-4" /> HISTORY
+            </button>
+          )}
+          <button 
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="px-3 py-1.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500 hover:bg-emerald-500 hover:text-black font-black uppercase text-xs tracking-widest cyber-cut transition-all flex items-center gap-2"
+          >
+            <PackagePlus className="w-4 h-4" /> ADD_ITEM
+          </button>
+        </div>
       </div>
 
       {showAddForm && (

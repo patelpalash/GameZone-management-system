@@ -11,7 +11,7 @@ import ExpenseManager from "./finance/ExpenseManager";
 import InventorySalesHistory from "./finance/InventorySalesHistory";
 import { Expense, InventorySale } from "@/lib/financeApi";
 
-export default function AccountingDashboard() {
+export default function AccountingDashboard({ initialTab = "ledger" }: { initialTab?: "ledger" | "inventory_sales" | "expenses" }) {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [stations, setStations] = useState<Station[]>([]);
   
@@ -20,7 +20,6 @@ export default function AccountingDashboard() {
 
   const [startDateStr, setStartDateStr] = useState(() => {
     const d = new Date();
-    d.setDate(d.getDate() - 7);
     return d.toISOString().split('T')[0];
   });
   const [endDateStr, setEndDateStr] = useState("");
@@ -33,6 +32,7 @@ export default function AccountingDashboard() {
       const start = new Date(startDateStr);
       start.setHours(0,0,0,0);
       const diff = Math.round((today.getTime() - start.getTime()) / (1000 * 3600 * 24));
+      if (diff === 0) return '0';
       if (diff === 7) return '7';
       if (diff === 10) return '10';
       if (diff === 15) return '15';
@@ -42,7 +42,7 @@ export default function AccountingDashboard() {
     return 'custom';
   }, [startDateStr, endDateStr]);
 
-  const [activeTab, setActiveTab] = useState<"ledger" | "inventory_sales" | "expenses">("ledger");
+  const [activeTab, setActiveTab] = useState<"ledger" | "inventory_sales" | "expenses">(initialTab);
 
   useEffect(() => {
     // 1. Fetch Stations
@@ -68,8 +68,8 @@ export default function AccountingDashboard() {
 
   // Fetch Finance Data
   useEffect(() => {
-    const start = startDateStr ? new Date(startDateStr) : new Date(0); // Epoch if none
-    const end = endDateStr ? new Date(endDateStr) : new Date(2100, 1, 1);
+    const start = startDateStr ? new Date(startDateStr + "T00:00:00") : new Date(0); // Epoch if none
+    const end = endDateStr ? new Date(endDateStr + "T00:00:00") : new Date(2100, 1, 1);
     
     // Include time up to the end of the day for endDate
     end.setHours(23, 59, 59, 999);
@@ -120,12 +120,12 @@ export default function AccountingDashboard() {
       const checkDate = new Date(bDate.getFullYear(), bDate.getMonth(), bDate.getDate());
 
       if (startDateStr) {
-        const start = new Date(startDateStr);
+        const start = new Date(startDateStr + "T00:00:00");
         if (checkDate < new Date(start.getFullYear(), start.getMonth(), start.getDate())) return false;
       }
 
       if (endDateStr) {
-        const end = new Date(endDateStr);
+        const end = new Date(endDateStr + "T00:00:00");
         if (checkDate > new Date(end.getFullYear(), end.getMonth(), end.getDate())) return false;
       }
 
@@ -189,8 +189,14 @@ export default function AccountingDashboard() {
       if (st?.type === 'PC') pr += b.totalCost;
       else if (st?.type === 'PS5' || st?.type === 'Xbox') cr += b.totalCost;
 
-      if (b.paymentMethod === "Cash") cash += b.totalCost;
-      else upi += b.totalCost;
+      if (b.paymentMethod === "Cash") {
+        cash += b.totalCost;
+      } else if (b.paymentMethod === "Split") {
+        cash += (b.splitCash || 0);
+        upi += (b.splitOnline || 0);
+      } else {
+        upi += b.totalCost;
+      }
     });
 
     inventorySales.forEach(s => {
@@ -255,6 +261,66 @@ export default function AccountingDashboard() {
     document.body.removeChild(link);
   };
 
+  const exportToPDF = () => {
+    if (ledgerTransactions.length === 0) return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    
+    let html = `
+      <html>
+        <head>
+          <title>Master Ledger - ${startDateStr || 'All Time'}</title>
+          <style>
+            body { font-family: monospace; padding: 20px; color: #000; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #f2f2f2; }
+            .profit { color: #16a34a; font-weight: bold; }
+            .expense { color: #dc2626; font-weight: bold; }
+            .header { text-align: center; margin-bottom: 20px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h2>MASTER LEDGER</h2>
+            <p>Date Range: ${startDateStr || 'Start'} to ${endDateStr || 'Today'}</p>
+          </div>
+          <table>
+            <thead>
+              <tr><th>Date & Time</th><th>Description</th><th>Debit (In)</th><th>Credit (Out)</th></tr>
+            </thead>
+            <tbody>
+    `;
+    
+    // Sort chronological for PDF
+    const sortedForPdf = [...ledgerTransactions].sort((a,b) => a.timestamp - b.timestamp);
+    
+    sortedForPdf.forEach(tx => {
+      const isExpense = tx.type === 'expense' || tx.type === 'refund';
+      html += `
+        <tr>
+          <td>${new Date(tx.timestamp).toLocaleString()}</td>
+          <td>${tx.description}</td>
+          <td class="profit">${!isExpense ? '+₹' + tx.amount.toLocaleString() : '-'}</td>
+          <td class="expense">${isExpense ? '-₹' + tx.amount.toLocaleString() : '-'}</td>
+        </tr>
+      `;
+    });
+    
+    html += `
+            </tbody>
+          </table>
+          <script>
+            window.onload = () => { window.print(); window.close(); }
+          </script>
+        </body>
+      </html>
+    `;
+    
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 pb-2 border-b border-emerald-500/30 gap-4">
@@ -270,54 +336,63 @@ export default function AccountingDashboard() {
         </div>
       </div>
 
+      <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-4 p-4 border border-slate-800 bg-slate-950/40 cyber-cut">
+        <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 w-full xl:w-auto">
+          <select 
+            value={quickSelectValue}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val === 'all') {
+                setStartDateStr(''); setEndDateStr('');
+              } else if (val !== 'custom') {
+                const d = new Date();
+                d.setDate(d.getDate() - parseInt(val));
+                setStartDateStr(d.toISOString().split('T')[0]);
+                setEndDateStr('');
+              }
+            }}
+            className="bg-black border border-slate-800 text-cyan-500 text-xs font-mono p-2 focus:outline-none focus:border-cyan-500 cursor-pointer uppercase tracking-widest"
+          >
+            <option value="custom" disabled hidden>Custom Range</option>
+            <option value="0">Today</option>
+            <option value="7">Last 7 Days</option>
+            <option value="10">Last 10 Days</option>
+            <option value="15">Last 15 Days</option>
+            <option value="30">Monthly</option>
+            <option value="365">Yearly</option>
+            <option value="all">All Time</option>
+          </select>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-500 uppercase font-mono">From:</span>
+            <input type="date" value={startDateStr} onChange={(e) => setStartDateStr(e.target.value)} className="bg-black border border-slate-800 text-emerald-500 text-xs font-mono p-2 focus:outline-none focus:border-emerald-500" />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-500 uppercase font-mono">To:</span>
+            <input type="date" value={endDateStr} onChange={(e) => setEndDateStr(e.target.value)} className="bg-black border border-slate-800 text-emerald-500 text-xs font-mono p-2 focus:outline-none focus:border-emerald-500" />
+          </div>
+          {(startDateStr || endDateStr) && (
+            <button onClick={() => { setStartDateStr(""); setEndDateStr(""); }} className="w-full sm:w-auto px-3 py-1.5 border border-red-500/50 text-red-400 hover:bg-red-950/20 text-xs font-bold tracking-wider uppercase font-mono mt-2 sm:mt-0">RESET</button>
+          )}
+        </div>
+        
+        {activeTab === "ledger" && (
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full xl:w-auto">
+            <button onClick={exportToCSV} disabled={ledgerTransactions.length === 0} className="w-full sm:w-auto px-4 py-2 bg-emerald-500 text-black font-black uppercase text-xs tracking-widest hover:bg-emerald-400 flex justify-center items-center gap-2 cyber-cut-reverse disabled:opacity-50">
+              <Download size={14} /> EXPORT_CSV
+            </button>
+            <button onClick={exportToPDF} disabled={ledgerTransactions.length === 0} className="w-full sm:w-auto px-4 py-2 bg-pink-500 text-black font-black uppercase text-xs tracking-widest hover:bg-pink-400 flex justify-center items-center gap-2 cyber-cut-reverse disabled:opacity-50">
+              <Download size={14} /> EXPORT_PDF
+            </button>
+          </div>
+        )}
+      </div>
+
       {activeTab === "inventory_sales" && <InventorySalesHistory sales={inventorySales} />}
       {activeTab === "expenses" && <ExpenseManager />}
 
       {activeTab === "ledger" && (
         <div className="space-y-6 animate-fade-in">
-          {/* Date Filter & Export Controls */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 p-4 border border-slate-800 bg-slate-950/40 cyber-cut">
-            <div className="flex flex-wrap items-center gap-3">
-              <select 
-                value={quickSelectValue}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === 'all') {
-                    setStartDateStr(''); setEndDateStr('');
-                  } else if (val !== 'custom') {
-                    const d = new Date();
-                    d.setDate(d.getDate() - parseInt(val));
-                    setStartDateStr(d.toISOString().split('T')[0]);
-                    setEndDateStr('');
-                  }
-                }}
-                className="bg-black border border-slate-800 text-cyan-500 text-xs font-mono p-2 focus:outline-none focus:border-cyan-500 cursor-pointer uppercase tracking-widest"
-              >
-                <option value="custom" disabled hidden>Custom Range</option>
-                <option value="7">Last 7 Days</option>
-                <option value="10">Last 10 Days</option>
-                <option value="15">Last 15 Days</option>
-                <option value="30">Monthly</option>
-                <option value="365">Yearly</option>
-                <option value="all">All Time</option>
-              </select>
-
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-500 uppercase font-mono">From:</span>
-                <input type="date" value={startDateStr} onChange={(e) => setStartDateStr(e.target.value)} className="bg-black border border-slate-800 text-emerald-500 text-xs font-mono p-2 focus:outline-none focus:border-emerald-500" />
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-500 uppercase font-mono">To:</span>
-                <input type="date" value={endDateStr} onChange={(e) => setEndDateStr(e.target.value)} className="bg-black border border-slate-800 text-emerald-500 text-xs font-mono p-2 focus:outline-none focus:border-emerald-500" />
-              </div>
-              {(startDateStr || endDateStr) && (
-                <button onClick={() => { setStartDateStr(""); setEndDateStr(""); }} className="px-3 py-1.5 border border-red-500/50 text-red-400 hover:bg-red-950/20 text-xs font-bold tracking-wider uppercase font-mono">RESET</button>
-              )}
-            </div>
-            <button onClick={exportToCSV} disabled={ledgerTransactions.length === 0} className="px-4 py-2 bg-emerald-500 text-black font-black uppercase text-xs tracking-widest hover:bg-emerald-400 flex gap-2 cyber-cut-reverse disabled:opacity-50">
-              <Download size={14} /> EXPORT_CSV
-            </button>
-          </div>
 
           {/* Top Metrics Row */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

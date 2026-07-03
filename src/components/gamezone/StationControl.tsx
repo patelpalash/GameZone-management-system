@@ -258,6 +258,11 @@ export default function StationControl() {
   }, []);
 
   const handleActivatePrebook = async (booking: Booking) => {
+    const station = stations.find(s => s.id === booking.stationId);
+    if (station?.status === "occupied") {
+      alert("Error: Station is currently occupied by an active session. Please end it first.");
+      return;
+    }
     try {
       const batch = writeBatch(db);
       

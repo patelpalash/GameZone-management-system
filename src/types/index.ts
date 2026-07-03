@@ -25,9 +25,11 @@ export interface Booking {
   userPhone?: string;
   durationMinutes: number;
   totalCost: number;
-  status: "pending" | "pending_payment" | "confirmed" | "active" | "completed" | "failed";
+  status: "pending" | "pending_payment" | "confirmed" | "active" | "completed" | "failed" | "refunded";
   transactionId: string;
-  paymentMethod?: "UPI" | "UPI_MOCK" | "Cash" | "PhonePe_UPI"; // For Accounting
+  paymentMethod?: "UPI" | "UPI_MOCK" | "Cash" | "PhonePe_UPI" | "Split" | "Online"; // For Accounting
+  splitCash?: number;
+  splitOnline?: number;
   startTime: Timestamp | null;
   endTime: Timestamp | null;
   isPrebook?: boolean;

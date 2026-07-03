@@ -16,6 +16,7 @@ import NextLink from "next/link";
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<"operations" | "inventory" | "schedule" | "finance" | "tournaments" | "payments" | "users" | "settings">("operations");
+  const [financeSubTab, setFinanceSubTab] = useState<"ledger" | "inventory_sales" | "expenses">("ledger");
 
   return (
     <AdminGuard>
@@ -39,52 +40,52 @@ export default function AdminDashboard() {
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex flex-wrap gap-4 border-b border-slate-800 pb-2">
+        <div className="flex overflow-x-auto gap-2 sm:gap-4 border-b border-slate-800 pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           <button 
             onClick={() => setActiveTab("operations")}
-            className={`px-6 py-3 font-black tracking-widest uppercase text-sm cyber-cut transition-all flex items-center gap-2 ${activeTab === 'operations' ? 'bg-cyan-500 text-black glow-cyan' : 'text-slate-400 border border-slate-800 hover:text-cyan-500'}`}
+            className={`whitespace-nowrap shrink-0 px-4 py-2 sm:px-6 sm:py-3 font-black tracking-widest uppercase text-xs sm:text-sm cyber-cut transition-all flex items-center gap-2 ${activeTab === 'operations' ? 'bg-cyan-500 text-black glow-cyan' : 'text-slate-400 border border-slate-800 hover:text-cyan-500'}`}
           >
             <Terminal className="w-4 h-4" /> LIVE_OPERATIONS
           </button>
           <button 
             onClick={() => setActiveTab("inventory")}
-            className={`px-6 py-3 font-black tracking-widest uppercase text-sm cyber-cut transition-all flex items-center gap-2 ${activeTab === 'inventory' ? 'bg-cyan-500 text-black glow-cyan' : 'text-slate-400 border border-slate-800 hover:text-cyan-500'}`}
+            className={`whitespace-nowrap shrink-0 px-4 py-2 sm:px-6 sm:py-3 font-black tracking-widest uppercase text-xs sm:text-sm cyber-cut transition-all flex items-center gap-2 ${activeTab === 'inventory' ? 'bg-cyan-500 text-black glow-cyan' : 'text-slate-400 border border-slate-800 hover:text-cyan-500'}`}
           >
             <Store className="w-4 h-4" /> INVENTORY
           </button>
           <button 
             onClick={() => setActiveTab("schedule")}
-            className={`px-6 py-3 font-black tracking-widest uppercase text-sm cyber-cut transition-all flex items-center gap-2 ${activeTab === 'schedule' ? 'bg-purple-500 text-black shadow-[0_0_15px_rgba(168,85,247,0.5)]' : 'text-slate-400 border border-slate-800 hover:text-purple-500'}`}
+            className={`whitespace-nowrap shrink-0 px-4 py-2 sm:px-6 sm:py-3 font-black tracking-widest uppercase text-xs sm:text-sm cyber-cut transition-all flex items-center gap-2 ${activeTab === 'schedule' ? 'bg-purple-500 text-black shadow-[0_0_15px_rgba(168,85,247,0.5)]' : 'text-slate-400 border border-slate-800 hover:text-purple-500'}`}
           >
             <Calendar className="w-4 h-4" /> MASTER_SCHEDULE
           </button>
           <button 
             onClick={() => setActiveTab("tournaments")}
-            className={`px-6 py-3 font-black tracking-widest uppercase text-sm cyber-cut transition-all flex items-center gap-2 ${activeTab === 'tournaments' ? 'bg-pink-500 text-black glow-pink' : 'text-slate-400 border border-slate-800 hover:text-pink-500'}`}
+            className={`whitespace-nowrap shrink-0 px-4 py-2 sm:px-6 sm:py-3 font-black tracking-widest uppercase text-xs sm:text-sm cyber-cut transition-all flex items-center gap-2 ${activeTab === 'tournaments' ? 'bg-pink-500 text-black glow-pink' : 'text-slate-400 border border-slate-800 hover:text-pink-500'}`}
           >
             <Gamepad2 className="w-4 h-4" /> TOURNAMENTS_MANAGER
           </button>
           <button 
             onClick={() => setActiveTab("finance")}
-            className={`px-6 py-3 font-black tracking-widest uppercase text-sm cyber-cut transition-all flex items-center gap-2 ${activeTab === 'finance' ? 'bg-emerald-500 text-black glow-emerald' : 'text-slate-400 border border-slate-800 hover:text-emerald-500'}`}
+            className={`whitespace-nowrap shrink-0 px-4 py-2 sm:px-6 sm:py-3 font-black tracking-widest uppercase text-xs sm:text-sm cyber-cut transition-all flex items-center gap-2 ${activeTab === 'finance' ? 'bg-emerald-500 text-black glow-emerald' : 'text-slate-400 border border-slate-800 hover:text-emerald-500'}`}
           >
             <DollarSign className="w-4 h-4" /> FINANCE_LEDGER
           </button>
           <button 
             onClick={() => setActiveTab("payments")}
-            className={`px-6 py-3 font-black tracking-widest uppercase text-sm cyber-cut transition-all flex items-center gap-2 ${activeTab === 'payments' ? 'bg-yellow-500 text-black glow-yellow' : 'text-slate-400 border border-slate-800 hover:text-yellow-500'}`}
+            className={`whitespace-nowrap shrink-0 px-4 py-2 sm:px-6 sm:py-3 font-black tracking-widest uppercase text-xs sm:text-sm cyber-cut transition-all flex items-center gap-2 ${activeTab === 'payments' ? 'bg-yellow-500 text-black glow-yellow' : 'text-slate-400 border border-slate-800 hover:text-yellow-500'}`}
           >
             <History className="w-4 h-4" /> PAYMENT_HISTORY
           </button>
           <button 
             onClick={() => setActiveTab("users")}
-            className={`px-6 py-3 font-black tracking-widest uppercase text-sm cyber-cut transition-all flex items-center gap-2 ${activeTab === 'users' ? 'bg-blue-500 text-black shadow-[0_0_15px_rgba(59,130,246,0.5)]' : 'text-slate-400 border border-slate-800 hover:text-blue-500'}`}
+            className={`whitespace-nowrap shrink-0 px-4 py-2 sm:px-6 sm:py-3 font-black tracking-widest uppercase text-xs sm:text-sm cyber-cut transition-all flex items-center gap-2 ${activeTab === 'users' ? 'bg-blue-500 text-black shadow-[0_0_15px_rgba(59,130,246,0.5)]' : 'text-slate-400 border border-slate-800 hover:text-blue-500'}`}
           >
             <Users className="w-4 h-4" /> USERS_DATABASE
           </button>
           <button 
             onClick={() => setActiveTab("settings")}
-            className={`px-6 py-3 font-black tracking-widest uppercase text-sm cyber-cut transition-all flex items-center gap-2 ${activeTab === 'settings' ? 'bg-red-500 text-black shadow-[0_0_15px_rgba(239,68,68,0.5)]' : 'text-slate-400 border border-slate-800 hover:text-red-500'}`}
+            className={`whitespace-nowrap shrink-0 px-4 py-2 sm:px-6 sm:py-3 font-black tracking-widest uppercase text-xs sm:text-sm cyber-cut transition-all flex items-center gap-2 ${activeTab === 'settings' ? 'bg-red-500 text-black shadow-[0_0_15px_rgba(239,68,68,0.5)]' : 'text-slate-400 border border-slate-800 hover:text-red-500'}`}
           >
             <Settings className="w-4 h-4" /> SYSTEM_SETTINGS
           </button>
@@ -104,7 +105,10 @@ export default function AdminDashboard() {
 
         {activeTab === "inventory" && (
           <div className="min-h-[calc(100vh-240px)]">
-            <InventoryManager />
+            <InventoryManager onGoToHistory={() => {
+              setFinanceSubTab("inventory_sales");
+              setActiveTab("finance");
+            }} />
           </div>
         )}
 
@@ -122,7 +126,7 @@ export default function AdminDashboard() {
 
         {activeTab === "finance" && (
           <div className="min-h-[calc(100vh-240px)]">
-            <AccountingDashboard />
+            <AccountingDashboard initialTab={financeSubTab} />
           </div>
         )}
 

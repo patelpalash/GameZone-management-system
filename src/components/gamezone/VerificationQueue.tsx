@@ -114,7 +114,7 @@ export default function VerificationQueue() {
   }, [allBookings, searchQuery, filterStatus, filterType]);
 
   return (
-    <div className="bg-black border-2 border-cyan-500/40 cyber-cut h-full flex flex-col">
+    <div className="bg-black border-2 border-cyan-500/40 cyber-cut h-[450px] xl:h-full flex flex-col">
       <div className="border-b border-cyan-500/30 p-4 bg-cyan-500/5 shrink-0">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">

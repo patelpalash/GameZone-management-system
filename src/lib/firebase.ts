@@ -21,9 +21,11 @@ export const functions = getFunctions(app);
 export const auth = getAuth(app);
 
 // Ensure users stay logged in across page refreshes and browser sessions
-setPersistence(auth, browserLocalPersistence).catch((err) => {
-  console.error("Failed to set auth persistence:", err);
-});
+if (typeof window !== "undefined") {
+  setPersistence(auth, browserLocalPersistence).catch((err) => {
+    console.error("Failed to set auth persistence:", err);
+  });
+}
 
 // Suppress benign Firestore/WebChannel AbortErrors to prevent Next.js error overlays in development
 if (typeof window !== "undefined") {

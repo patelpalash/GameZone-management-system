@@ -5,8 +5,6 @@ import { useAuth, ADMIN_EMAILS } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { Loader2, ShieldOff } from "lucide-react";
 import NextLink from "next/link";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "@/lib/firebase";
 
 export default function AdminGuard({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -22,15 +20,7 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
       setTimedOut(true);
     }, 6000);
 
-    // Also listen directly in case the context missed an update
-    const unsub = onAuthStateChanged(auth, () => {
-      clearTimeout(timer);
-    });
-
-    return () => {
-      clearTimeout(timer);
-      unsub();
-    };
+    return () => clearTimeout(timer);
   }, [loading]);
 
   const isAdmin = user ? ADMIN_EMAILS.includes(user.email || "") : false;

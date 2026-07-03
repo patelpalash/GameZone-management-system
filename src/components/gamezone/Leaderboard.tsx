@@ -61,7 +61,8 @@ export default function Leaderboard() {
         // Skip generic unnamed walk-ins to prevent them from aggregating into a massive fake player
         if (lowerName.includes("walk-in") || lowerName.includes("walk in") || lowerName.includes("unknown")) return;
         
-        const key = b.userId || lowerName; // Group by userId if online, otherwise group by name
+        const isOffline = b.transactionId?.startsWith("OFFLINE_");
+        const key = isOffline ? lowerName : (b.userId || lowerName); // Group by userId if online, otherwise group by name
 
         const current = userPlaytime[key] || {
           name: name,
