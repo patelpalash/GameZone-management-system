@@ -1,4 +1,4 @@
-import { collection, doc, addDoc, updateDoc, getDocs, query, where, Timestamp, orderBy, writeBatch } from "firebase/firestore";
+import { collection, doc, addDoc, updateDoc, deleteDoc, getDocs, query, where, Timestamp, orderBy, writeBatch } from "firebase/firestore";
 import { db } from "./firebase";
 
 // -- TYPES --
@@ -52,6 +52,11 @@ export const addInventoryItem = async (item: Omit<InventoryItem, "id">) => {
 export const updateInventoryItem = async (id: string, updates: Partial<InventoryItem>) => {
   const ref = doc(db, "inventory", id);
   await updateDoc(ref, updates);
+};
+
+export const deleteInventoryItem = async (id: string) => {
+  const ref = doc(db, "inventory", id);
+  await deleteDoc(ref);
 };
 
 export const sellInventoryItem = async (item: InventoryItem, quantity: number, paymentMethod: "Cash" | "UPI" = "Cash") => {

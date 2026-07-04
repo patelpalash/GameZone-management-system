@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Minus, PackagePlus, ShoppingCart, Loader2, History } from "lucide-react";
-import { InventoryItem, addInventoryItem, getInventoryItems, sellInventoryItem, updateInventoryItem } from "@/lib/financeApi";
+import { Plus, Minus, PackagePlus, ShoppingCart, Loader2, History, Trash2 } from "lucide-react";
+import { InventoryItem, addInventoryItem, getInventoryItems, sellInventoryItem, updateInventoryItem, deleteInventoryItem } from "@/lib/financeApi";
 
 export default function InventoryManager({ onGoToHistory }: { onGoToHistory?: () => void }) {
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -15,7 +15,7 @@ export default function InventoryManager({ onGoToHistory }: { onGoToHistory?: ()
 
   // Edit item state
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editData, setEditData] = useState<{name: string, costPrice: string, sellingPrice: string}>({ name: "", costPrice: "", sellingPrice: "" });
+  const [editData, setEditData] = useState<{name: string, costPrice: string, sellingPrice: string, stockLevel: string}>({ name: "", costPrice: "", sellingPrice: "", stockLevel: "" });
 
   useEffect(() => {
     fetchItems();
@@ -81,7 +81,8 @@ export default function InventoryManager({ onGoToHistory }: { onGoToHistory?: ()
     setEditData({
       name: item.name,
       costPrice: item.costPrice.toString(),
-      sellingPrice: item.sellingPrice.toString()
+      sellingPrice: item.sellingPrice.toString(),
+      stockLevel: item.stockLevel.toString()
     });
   };
 
@@ -90,12 +91,25 @@ export default function InventoryManager({ onGoToHistory }: { onGoToHistory?: ()
       await updateInventoryItem(id, {
         name: editData.name,
         costPrice: Number(editData.costPrice),
-        sellingPrice: Number(editData.sellingPrice)
+        sellingPrice: Number(editData.sellingPrice),
+        stockLevel: Number(editData.stockLevel)
       });
       setEditingId(null);
       fetchItems();
     } catch (err) {
       alert("Error updating item: " + (err as Error).message);
+    }
+  };
+
+  const handleDeleteItem = async (item: InventoryItem) => {
+    const confirmDelete = window.confirm(`⚠️ WARNING: Are you absolutely sure you want to delete the product "${item.name}"? This will permanently remove the card from the inventory list.`);
+    if (!confirmDelete) return;
+
+    try {
+      await deleteInventoryItem(item.id);
+      fetchItems();
+    } catch (err) {
+      alert("Error deleting item: " + (err as Error).message);
     }
   };
 
@@ -251,7 +265,18 @@ export default function InventoryManager({ onGoToHistory }: { onGoToHistory?: ()
                   <div className="flex items-center gap-2">
                     <span>Margin: {Math.round((profitMargin/displaySell)*100) || 0}%</span>
                     {isEditing ? (
-                      <button onClick={() => saveEdit(item.id)} className="text-emerald-400 hover:text-white px-1 underline">Save</button>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => saveEdit(item.id)} className="text-emerald-400 hover:text-white px-1 underline">Save</button>
+                        <button onClick={() => setEditingId(null)} className="text-slate-400 hover:text-white px-1 underline">Cancel</button>
+                        <button 
+                          onClick={() => handleDeleteItem(item)} 
+                          type="button" 
+                          className="text-red-500 hover:text-red-400 p-0.5 ml-1 transition-colors" 
+                          title="Delete Product Card"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     ) : (
                       <button onClick={() => startEdit(item)} className="text-cyan-500 hover:text-white px-1 underline">Edit</button>
                     )}
@@ -260,11 +285,24 @@ export default function InventoryManager({ onGoToHistory }: { onGoToHistory?: ()
               </div>
 
               <div className="flex items-center justify-between border-t border-slate-800 pt-3">
-                <div className="flex items-center gap-2 bg-black border border-slate-800 rounded-full overflow-hidden">
-                  <button onClick={() => handleUpdateStock(item, -1)} className="px-2 py-1 text-slate-400 hover:text-white hover:bg-slate-800"><Minus className="w-3 h-3" /></button>
-                  <span className={`text-xs font-mono font-bold w-6 text-center ${isLowStock ? 'text-red-500' : 'text-white'}`}>{item.stockLevel}</span>
-                  <button onClick={() => handleUpdateStock(item, 1)} className="px-2 py-1 text-slate-400 hover:text-white hover:bg-slate-800"><Plus className="w-3 h-3" /></button>
-                </div>
+                {isEditing ? (
+                  <div className="flex items-center gap-1.5 bg-black border border-emerald-500/50 rounded px-2 py-1">
+                    <span className="text-[9px] font-mono text-slate-500 uppercase">Stock:</span>
+                    <input 
+                      type="number" 
+                      min="0"
+                      value={editData.stockLevel} 
+                      onChange={e => setEditData({...editData, stockLevel: e.target.value})}
+                      className="bg-transparent text-xs font-mono font-bold w-12 text-center text-white outline-none"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 bg-black border border-slate-800 rounded-full overflow-hidden">
+                    <button onClick={() => handleUpdateStock(item, -1)} className="px-2 py-1 text-slate-400 hover:text-white hover:bg-slate-800"><Minus className="w-3 h-3" /></button>
+                    <span className={`text-xs font-mono font-bold w-6 text-center ${isLowStock ? 'text-red-500' : 'text-white'}`}>{item.stockLevel}</span>
+                    <button onClick={() => handleUpdateStock(item, 1)} className="px-2 py-1 text-slate-400 hover:text-white hover:bg-slate-800"><Plus className="w-3 h-3" /></button>
+                  </div>
+                )}
                 
                 <div className="flex gap-1">
                   <button 
