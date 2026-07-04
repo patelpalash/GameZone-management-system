@@ -5,6 +5,19 @@ admin.initializeApp();
 
 const db = admin.firestore();
 
+// Helper to format phone number to E.164 without '+' for WhatsApp (e.g. 919876543210)
+function formatPhoneNumber(phone: string | undefined): string {
+  if (!phone) return "";
+  // Remove all non-numeric characters
+  const cleaned = phone.replace(/\D/g, "");
+  // If it is a 10-digit number, prepend the default country code (default 91 for India)
+  if (cleaned.length === 10) {
+    const countryCode = process.env.DEFAULT_COUNTRY_CODE || "91";
+    return countryCode + cleaned;
+  }
+  return cleaned;
+}
+
 // This function runs every 1 minute
 export const checkExpiringBookings = functions.pubsub.schedule("every 1 minutes").onRun(async (context) => {
   const now = new Date();
@@ -29,32 +42,69 @@ export const checkExpiringBookings = functions.pubsub.schedule("every 1 minutes"
       return null;
     }
 
+    const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+    const templateName = process.env.WHATSAPP_TEMPLATE_NAME || "session_expiring";
+
+    if (!phoneId || !accessToken) {
+      console.warn("WhatsApp credentials not set (WHATSAPP_PHONE_NUMBER_ID or WHATSAPP_ACCESS_TOKEN is missing). Skipping WhatsApp sends.");
+    }
+
     const promises: Promise<any>[] = [];
 
-    activeBookingsSnapshot.forEach((doc) => {
-      const booking = doc.data();
-      console.log(`[WHATSAPP TRIGGER] Alerting User ${booking.userId} for Station ${booking.stationId}! Session ends in 10 minutes.`);
-      
-      // Here is where you would integrate the official WhatsApp Business API (e.g., Twilio or Meta Graph API)
-      /*
-      const promise = fetch('https://graph.facebook.com/v17.0/YOUR_PHONE_NUMBER_ID/messages', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer YOUR_ACCESS_TOKEN`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          to: "USER_PHONE_NUMBER",
-          type: "template",
-          template: {
-            name: "session_expiring",
-            language: { code: "en_US" }
-          }
-        })
-      });
-      promises.push(promise);
-      */
+    activeBookingsSnapshot.forEach((docSnap) => {
+      const booking = docSnap.data();
+      const userPhone = booking.userPhone;
+      const userName = booking.userName || "Walk-in Guest";
+      const stationId = booking.stationId || "Station";
+
+      console.log(`[EXPIRING ALERT] Booking expiring in 10 mins for user: ${userName}, phone: ${userPhone}`);
+
+      if (phoneId && accessToken && userPhone) {
+        const formattedPhone = formatPhoneNumber(userPhone);
+        if (formattedPhone) {
+          console.log(`[WHATSAPP SEND] Sending expiring session template to: ${formattedPhone}`);
+          const promise = fetch(`https://graph.facebook.com/v17.0/${phoneId}/messages`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              messaging_product: "whatsapp",
+              to: formattedPhone,
+              type: "template",
+              template: {
+                name: templateName,
+                language: { code: "en_US" },
+                components: [
+                  {
+                    type: "body",
+                    parameters: [
+                      { type: "text", text: userName },
+                      { type: "text", text: stationId },
+                    ],
+                  },
+                ],
+              },
+            }),
+          })
+          .then(async (res) => {
+            const data = await res.json();
+            if (!res.ok) {
+              console.error(`[WHATSAPP ERROR] Failed to send message:`, data);
+            } else {
+              console.log(`[WHATSAPP SUCCESS] Message sent successfully:`, data);
+            }
+            return data;
+          })
+          .catch((err) => {
+            console.error(`[WHATSAPP FETCH EXCEPTION] Error:`, err);
+          });
+          
+          promises.push(promise);
+        }
+      }
     });
 
     await Promise.all(promises);
