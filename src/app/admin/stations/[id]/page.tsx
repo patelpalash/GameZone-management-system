@@ -12,7 +12,6 @@ import {
   getDocs,
   updateDoc,
   writeBatch,
-  deleteDoc,
   Timestamp,
 } from "firebase/firestore";
 import { Station, Booking } from "@/types";
@@ -33,7 +32,22 @@ export default function StationDetailPage() {
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
   const [editUserName, setEditUserName] = useState("");
   const [editDuration, setEditDuration] = useState<number>(60);
-  const [editPaymentMode, setEditPaymentMode] = useState<"CASH" | "ONLINE">("CASH");
+  const [editPaymentMode, setEditPaymentMode] = useState<"CASH" | "ONLINE" | "SPLIT">("CASH");
+  const [editSplitCash, setEditSplitCash] = useState<string>("");
+  const [editSplitOnline, setEditSplitOnline] = useState<string>("");
+  const [hasManuallySplit, setHasManuallySplit] = useState(false);
+
+  const newCost = station ? Number(((station.pricePerHour / 60) * editDuration).toFixed(2)) : 0;
+
+  useEffect(() => {
+    if (editPaymentMode === "SPLIT" && !hasManuallySplit) {
+      const half = Math.floor(newCost / 2);
+      setEditSplitCash(half.toString());
+      setEditSplitOnline((newCost - half).toString());
+    } else if (editPaymentMode !== "SPLIT") {
+      setHasManuallySplit(false);
+    }
+  }, [newCost, editPaymentMode, hasManuallySplit]);
 
   const fetchData = async () => {
     try {
@@ -106,13 +120,34 @@ export default function StationDetailPage() {
   };
 
   const handleDeleteBooking = async (booking: Booking) => {
-    if (!window.confirm(`DELETE booking record for ${booking.userName || "WALK_IN_USER"}? This will permanently remove it from the database.`)) return;
+    if (booking.status === "refunded") {
+      alert("This booking has already been refunded.");
+      return;
+    }
+    if (!window.confirm("Are you sure you want to refund/void this payment record? This will log a refund in the financial ledger and mark it as voided.")) return;
     setActionLoading(booking.id);
     try {
-      await deleteDoc(doc(db, "bookings", booking.id));
+      const batch = writeBatch(db);
+      
+      // 1. Mark booking as refunded
+      batch.update(doc(db, "bookings", booking.id), { status: "refunded" });
+      
+      // 2. Log an expense for the refund so the ledger balances properly
+      if (booking.totalCost && booking.totalCost > 0) {
+        batch.set(doc(collection(db, "expenses")), {
+          amount: booking.totalCost,
+          category: "Refund",
+          note: `Refund/Void for booking: ${booking.userName || booking.id}`,
+          createdAt: Timestamp.now(),
+          createdBy: "admin"
+        });
+      }
+
+      await batch.commit();
       await fetchData();
     } catch (err) {
-      console.error("Failed to delete booking", err);
+      console.error("Failed to delete/refund booking", err);
+      alert("Failed to refund booking.");
     } finally {
       setActionLoading(null);
     }
@@ -124,15 +159,24 @@ export default function StationDetailPage() {
     
     try {
       const bookingRef = doc(db, "bookings", editingBooking.id);
+      
+      // Re-calculate cost based on edited duration
+      const calculatedCost = Number(((station.pricePerHour / 60) * editDuration).toFixed(2));
+      
       const updates: Record<string, unknown> = {
         userName: editUserName,
         durationMinutes: editDuration,
-        transactionId: editPaymentMode === "CASH" ? "OFFLINE_CASH" : "OFFLINE_ONLINE",
-        paymentMethod: editPaymentMode === "CASH" ? "Cash" : "Online"
+        totalCost: calculatedCost,
+        transactionId: editPaymentMode === "CASH" ? "OFFLINE_CASH" : editPaymentMode === "ONLINE" ? "OFFLINE_ONLINE" : "OFFLINE_SPLIT",
+        paymentMethod: editPaymentMode === "CASH" ? "Cash" : editPaymentMode === "ONLINE" ? "Online" : "Split",
+        ...(editPaymentMode === "SPLIT" ? {
+          splitCash: Number(editSplitCash) || 0,
+          splitOnline: Number(editSplitOnline) || 0
+        } : {
+          splitCash: null,
+          splitOnline: null
+        })
       };
-
-      const newCost = Number(((station.pricePerHour / 60) * editDuration).toFixed(2));
-      updates.totalCost = newCost;
 
       if (editingBooking.status === "active" && editingBooking.startTime) {
         const start = editingBooking.startTime.toDate();
@@ -194,6 +238,7 @@ export default function StationDetailPage() {
   const getPaymentBadge = (transactionId: string) => {
     if (transactionId === "OFFLINE_CASH") return "CASH";
     if (transactionId === "OFFLINE_ONLINE") return "ONLINE";
+    if (transactionId === "OFFLINE_SPLIT") return "SPLIT";
     return "ONLINE";
   };
 
@@ -299,7 +344,15 @@ export default function StationDetailPage() {
               setEditingBooking(b);
               setEditUserName(b.userName || "");
               setEditDuration(b.durationMinutes || 60);
-              setEditPaymentMode(getPaymentBadge(b.transactionId) as "CASH" | "ONLINE");
+              const badge = getPaymentBadge(b.transactionId);
+              setEditPaymentMode(badge as "CASH" | "ONLINE" | "SPLIT");
+              if (b.transactionId === "OFFLINE_SPLIT") {
+                setEditSplitCash((b.splitCash || 0).toString());
+                setEditSplitOnline((b.splitOnline || 0).toString());
+                setHasManuallySplit(true);
+              } else {
+                setHasManuallySplit(false);
+              }
             }}
             disabled={isProcessing}
             className="flex-1 py-2 text-[10px] font-black tracking-widest uppercase border border-indigo-500/50 text-indigo-400 bg-indigo-950/20 hover:bg-indigo-500/20 transition-all disabled:opacity-40 flex items-center justify-center gap-1"
@@ -528,7 +581,55 @@ export default function StationDetailPage() {
                   >
                     ONLINE
                   </button>
+                  <button
+                    onClick={() => setEditPaymentMode("SPLIT")}
+                    className={`flex-1 py-2 text-xs font-black tracking-widest uppercase border transition-colors ${
+                      editPaymentMode === "SPLIT" 
+                        ? "bg-purple-500/20 text-purple-400 border-purple-500" 
+                        : "bg-slate-900 text-slate-500 border-slate-700 hover:border-purple-500/50"
+                    }`}
+                  >
+                    SPLIT
+                  </button>
                 </div>
+                {editPaymentMode === "SPLIT" && (
+                  <div className="flex gap-3 mt-3">
+                    <div className="flex-1">
+                      <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">CASH (₹)</label>
+                      <input 
+                        type="number"
+                        min="0"
+                        max={newCost}
+                        value={editSplitCash}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setEditSplitCash(val);
+                          setHasManuallySplit(true);
+                          const numVal = Number(val) || 0;
+                          setEditSplitOnline(Math.max(0, newCost - numVal).toString());
+                        }}
+                        className="w-full bg-slate-900 border border-yellow-500/50 p-2 text-yellow-400 focus:outline-none focus:border-yellow-500 text-xs font-mono"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">ONLINE (₹)</label>
+                      <input 
+                        type="number"
+                        min="0"
+                        max={newCost}
+                        value={editSplitOnline}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setEditSplitOnline(val);
+                          setHasManuallySplit(true);
+                          const numVal = Number(val) || 0;
+                          setEditSplitCash(Math.max(0, newCost - numVal).toString());
+                        }}
+                        className="w-full bg-slate-900 border border-cyan-500/50 p-2 text-cyan-400 focus:outline-none focus:border-cyan-500 text-xs font-mono"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="pt-4 border-t border-slate-800">

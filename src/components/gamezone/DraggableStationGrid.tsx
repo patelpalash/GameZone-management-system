@@ -17,6 +17,7 @@ interface Props {
   activeBookings?: Booking[];
   onActivatePrebook?: (booking: Booking) => void;
   onAssignWalkIn?: (station: Station) => void;
+  recentlyCompletedStations?: Record<string, boolean>;
 }
 
 export default function DraggableStationGrid({ 
@@ -30,7 +31,8 @@ export default function DraggableStationGrid({
   confirmedBookings, 
   activeBookings,
   onActivatePrebook,
-  onAssignWalkIn
+  onAssignWalkIn,
+  recentlyCompletedStations
 }: Props) {
   const { setNodeRef, isOver } = useDroppable({
     id: containerId,
@@ -64,6 +66,7 @@ export default function DraggableStationGrid({
         {stations.map((station) => {
           const stationPrebooks = (confirmedBookings || []).filter(b => b.stationId === station.id);
           const stationActive = (activeBookings || []).find(b => b.stationId === station.id && b.status === "active");
+          const isRecentlyCompleted = !!(recentlyCompletedStations && recentlyCompletedStations[station.id]);
           return (
             <SortableStationCard 
               key={station.id} 
@@ -77,6 +80,7 @@ export default function DraggableStationGrid({
               activeBooking={stationActive}
               onActivatePrebook={onActivatePrebook}
               onAssignWalkIn={onAssignWalkIn}
+              isRecentlyCompleted={isRecentlyCompleted}
             />
           );
         })}

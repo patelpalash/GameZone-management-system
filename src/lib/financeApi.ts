@@ -42,6 +42,16 @@ export const logExpense = async (expense: Omit<Expense, "id" | "createdAt">) => 
   return docRef.id;
 };
 
+export const updateExpense = async (id: string, updates: Partial<Expense>) => {
+  const ref = doc(db, "expenses", id);
+  await updateDoc(ref, updates);
+};
+
+export const deleteExpense = async (id: string) => {
+  const ref = doc(db, "expenses", id);
+  await deleteDoc(ref);
+};
+
 // -- INVENTORY API --
 
 export const addInventoryItem = async (item: Omit<InventoryItem, "id">) => {

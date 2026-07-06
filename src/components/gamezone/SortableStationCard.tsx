@@ -16,6 +16,7 @@ interface Props {
   activeBooking?: Booking;
   onActivatePrebook?: (booking: Booking) => void;
   onAssignWalkIn?: (station: Station) => void;
+  isRecentlyCompleted?: boolean;
 }
 
 export default function SortableStationCard({ 
@@ -28,7 +29,8 @@ export default function SortableStationCard({
   confirmedBookings, 
   activeBooking,
   onActivatePrebook,
-  onAssignWalkIn
+  onAssignWalkIn,
+  isRecentlyCompleted
 }: Props) {
   const {
     attributes,
@@ -52,6 +54,7 @@ export default function SortableStationCard({
       ref={setNodeRef} 
       style={style}
       className={`p-4 border-2 cyber-cut transition-colors relative group cursor-pointer hover:shadow-[0_0_20px_rgba(255,255,255,0.1)] ${
+        isRecentlyCompleted ? 'border-yellow-400 bg-yellow-400/25 animate-pulse shadow-[0_0_30px_rgba(252,238,10,0.6)]' :
         station.status === 'occupied' ? 'border-pink-500/60 bg-pink-500/5 hover:border-pink-500' : 
         station.status === 'available' ? 'border-cyan-500/30 bg-cyan-500/5 hover:border-cyan-500' :
         station.status === 'pending' ? 'border-yellow-400/30 bg-yellow-400/5 hover:border-yellow-400' : 

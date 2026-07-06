@@ -102,6 +102,7 @@ export default function StationControl() {
   const [modalTargetIndex, setModalTargetIndex] = useState(0);
   const [editingStation, setEditingStation] = useState<Station | null>(null);
   const [offlineStation, setOfflineStation] = useState<Station | null>(null);
+  const [recentlyCompletedStations, setRecentlyCompletedStations] = useState<Record<string, boolean>>({});
 
   // Form State inside Modal
   const [newName, setNewName] = useState("");
@@ -201,6 +202,14 @@ export default function StationControl() {
               // Play gentle notification beep if successfully expired
               if (didExpire) {
                 playBeep();
+                setRecentlyCompletedStations(prev => ({ ...prev, [booking.stationId]: true }));
+                setTimeout(() => {
+                  setRecentlyCompletedStations(prev => {
+                    const next = { ...prev };
+                    delete next[booking.stationId];
+                    return next;
+                  });
+                }, 10000);
               }
             } catch (err) {
               console.error("Error auto-ending session:", err);
@@ -572,6 +581,7 @@ export default function StationControl() {
               activeBookings={activeBookings}
               onActivatePrebook={handleActivatePrebook}
               onAssignWalkIn={setOfflineStation}
+              recentlyCompletedStations={recentlyCompletedStations}
             />
           </div>
 
@@ -593,6 +603,7 @@ export default function StationControl() {
               activeBookings={activeBookings}
               onActivatePrebook={handleActivatePrebook}
               onAssignWalkIn={setOfflineStation}
+              recentlyCompletedStations={recentlyCompletedStations}
             />
           </div>
         </div>
