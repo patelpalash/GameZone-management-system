@@ -56,7 +56,7 @@ export default function AccountingDashboard({ initialTab = "ledger" }: { initial
     fetchStations();
 
     // 2. Fetch Bookings (include refunded so the ledger shows the original revenue, balanced by the refund expense)
-    const q = query(collection(db, "bookings"), where("status", "in", ["completed", "refunded"]));
+    const q = query(collection(db, "bookings"), where("status", "in", ["completed", "refunded", "active", "confirmed"]));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data: Booking[] = [];
       snapshot.forEach(d => data.push({ id: d.id, ...d.data() } as Booking));
@@ -207,8 +207,14 @@ export default function AccountingDashboard({ initialTab = "ledger" }: { initial
     inventorySales.forEach(s => {
       tr += s.totalRevenue;
       inv += s.totalRevenue;
-      if (s.paymentMethod === "Cash" || !s.paymentMethod) cash += s.totalRevenue;
-      else upi += s.totalRevenue;
+      if (s.paymentMethod === "Split") {
+        cash += (s.splitCash || 0);
+        upi += (s.splitOnline || 0);
+      } else if (s.paymentMethod === "Cash" || !s.paymentMethod) {
+        cash += s.totalRevenue;
+      } else {
+        upi += s.totalRevenue;
+      }
     });
 
     expenses.forEach(e => {

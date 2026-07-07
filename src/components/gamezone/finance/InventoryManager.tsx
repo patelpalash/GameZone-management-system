@@ -67,9 +67,27 @@ export default function InventoryManager({ onGoToHistory }: { onGoToHistory?: ()
     }
   };
 
-  const handleSell = async (item: InventoryItem, method: "Cash" | "UPI") => {
+  const handleSell = async (item: InventoryItem, method: "Cash" | "UPI" | "Split") => {
+    let splitCash = 0;
+    let splitOnline = 0;
+
+    if (method === "Split") {
+      const cashStr = window.prompt(`Selling ${item.name} for ₹${item.sellingPrice}.\n\nEnter CASH amount received:`);
+      if (cashStr === null) return; // User cancelled
+      const cashNum = Number(cashStr);
+      if (isNaN(cashNum) || cashNum < 0 || cashNum > item.sellingPrice) {
+        alert("Invalid cash amount. Sale cancelled.");
+        return;
+      }
+      splitCash = cashNum;
+      splitOnline = item.sellingPrice - cashNum;
+      
+      const confirmSplit = window.confirm(`Confirm Split Payment:\nCASH: ₹${splitCash}\nONLINE: ₹${splitOnline}\nTotal: ₹${item.sellingPrice}`);
+      if (!confirmSplit) return;
+    }
+
     try {
-      await sellInventoryItem(item, 1, method);
+      await sellInventoryItem(item, 1, method, splitCash, splitOnline);
       fetchItems();
     } catch (err) {
       alert("Error selling item: " + (err as Error).message);
@@ -320,6 +338,14 @@ export default function InventoryManager({ onGoToHistory }: { onGoToHistory?: ()
                     title="Sell via UPI"
                   >
                     UPI
+                  </button>
+                  <button 
+                    onClick={() => handleSell(item, "Split")}
+                    disabled={item.stockLevel <= 0 || isEditing}
+                    className="px-2 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-black uppercase text-[10px] tracking-widest cyber-cut disabled:opacity-50 flex items-center gap-1 transition-all"
+                    title="Sell via Split Payment"
+                  >
+                    SPLIT
                   </button>
                 </div>
               </div>

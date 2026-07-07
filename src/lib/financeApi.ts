@@ -27,7 +27,9 @@ export interface InventorySale {
   quantity: number;
   totalRevenue: number;
   totalProfit: number;
-  paymentMethod: "Cash" | "UPI";
+  paymentMethod: "Cash" | "UPI" | "Split";
+  splitCash?: number;
+  splitOnline?: number;
   createdAt: Timestamp;
 }
 
@@ -69,7 +71,13 @@ export const deleteInventoryItem = async (id: string) => {
   await deleteDoc(ref);
 };
 
-export const sellInventoryItem = async (item: InventoryItem, quantity: number, paymentMethod: "Cash" | "UPI" = "Cash") => {
+export const sellInventoryItem = async (
+  item: InventoryItem, 
+  quantity: number, 
+  paymentMethod: "Cash" | "UPI" | "Split" = "Cash",
+  splitCash?: number,
+  splitOnline?: number
+) => {
   if (item.stockLevel < quantity) {
     throw new Error("Not enough stock available");
   }
@@ -94,6 +102,8 @@ export const sellInventoryItem = async (item: InventoryItem, quantity: number, p
     totalRevenue: revenue,
     totalProfit: profit,
     paymentMethod,
+    splitCash: paymentMethod === "Split" ? (splitCash || 0) : null,
+    splitOnline: paymentMethod === "Split" ? (splitOnline || 0) : null,
     createdAt: Timestamp.now()
   });
 
