@@ -2,11 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { Plus, Loader2, Edit, Trash2, Save, X } from "lucide-react";
-import { Expense, logExpense, getExpensesForDateRange, updateExpense, deleteExpense } from "@/lib/financeApi";
+import { Expense, logExpense, updateExpense, deleteExpense } from "@/lib/financeApi";
 
-export default function ExpenseManager() {
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function ExpenseManager({ expenses, dateLabel = "Selected Period" }: { expenses: Expense[], dateLabel?: string }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newExpense, setNewExpense] = useState({ amount: "", category: "Rent", note: "" });
   const [submitting, setSubmitting] = useState(false);
@@ -18,24 +16,6 @@ export default function ExpenseManager() {
   const [editCategory, setEditCategory] = useState<string>("");
   const [editNote, setEditNote] = useState<string>("");
 
-  useEffect(() => {
-    fetchExpenses();
-  }, []);
-
-  const fetchExpenses = async () => {
-    setLoading(true);
-    try {
-      // Fetch last 30 days
-      const end = new Date();
-      const start = new Date();
-      start.setDate(end.getDate() - 30);
-      const data = await getExpensesForDateRange(start, end);
-      setExpenses(data);
-    } catch (err) {
-      console.error(err);
-    }
-    setLoading(false);
-  };
 
   const handleLogExpense = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,7 +32,6 @@ export default function ExpenseManager() {
       });
       setShowAddForm(false);
       setNewExpense({ amount: "", category: "Rent", note: "" });
-      fetchExpenses();
     } catch (err) {
       console.error("Error logging expense:", err);
       setError((err as Error).message || "Failed to log expense.");
@@ -77,7 +56,6 @@ export default function ExpenseManager() {
         note: editNote || editCategory
       });
       setEditingId(null);
-      fetchExpenses();
     } catch (err) {
       alert("Failed to update expense: " + (err as Error).message);
     }
@@ -90,15 +68,11 @@ export default function ExpenseManager() {
 
     try {
       await deleteExpense(exp.id);
-      fetchExpenses();
     } catch (err) {
       alert("Failed to delete expense: " + (err as Error).message);
     }
   };
 
-  if (loading) {
-    return <div className="p-8 flex justify-center text-pink-500"><Loader2 className="w-8 h-8 animate-spin" /></div>;
-  }
 
   const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
 
@@ -179,13 +153,13 @@ export default function ExpenseManager() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="p-4 border-2 border-pink-500/50 bg-pink-950/20 cyber-cut">
-          <p className="text-[10px] font-bold tracking-widest text-pink-500/70 uppercase">Total_Expenses (30d)</p>
+          <p className="text-[10px] font-bold tracking-widest text-pink-500/70 uppercase">Total_Expenses ({dateLabel})</p>
           <h3 className="text-3xl font-black text-pink-500 mt-2 glow-pink">₹{totalExpenses.toLocaleString()}</h3>
         </div>
       </div>
 
       <div className="border border-slate-800 bg-slate-950 p-4 cyber-cut">
-        <h4 className="text-xs font-black tracking-widest text-slate-400 uppercase mb-3">&gt; EXPENSE_LEDGER (Last 30 Days)</h4>
+        <h4 className="text-xs font-black tracking-widest text-slate-400 uppercase mb-3">&gt; EXPENSE_LEDGER ({dateLabel})</h4>
         <div className="overflow-x-auto overflow-y-auto max-h-[350px] custom-scrollbar">
           <table className="w-full text-left border-collapse text-xs font-mono">
             <thead className="sticky top-0 z-10 bg-slate-900 shadow-md">

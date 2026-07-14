@@ -425,7 +425,7 @@ export default function AccountingDashboard({ initialTab = "ledger" }: { initial
       </div>
 
       {activeTab === "inventory_sales" && <InventorySalesHistory sales={inventorySales} />}
-      {activeTab === "expenses" && <ExpenseManager />}
+      {activeTab === "expenses" && <ExpenseManager expenses={expenses} dateLabel={quickSelectValue === 'all' ? 'All Time' : quickSelectValue === '0' ? 'Today' : quickSelectValue === 'custom' ? 'Custom Range' : `Last ${quickSelectValue} Days`} />}
 
       {activeTab === "ledger" && (
         <div className="space-y-6 animate-fade-in">
