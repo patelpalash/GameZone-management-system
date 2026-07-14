@@ -4,12 +4,13 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Station, Booking } from "@/types";
 import { Loader2, AlertTriangle, User, UserPlus, Phone, Calendar as CalendarIcon, Clock } from "lucide-react";
-import { writeBatch, doc, Timestamp, collection, query, onSnapshot, setDoc, getDocs, orderBy, limit } from "firebase/firestore";
+import { collection, query, getDocs, doc, setDoc, Timestamp, writeBatch, orderBy, limit, onSnapshot, increment } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import { areIntervalsOverlapping, format } from "date-fns";
+import { sendWhatsAppMessage } from "@/lib/whatsappApi";
 
 interface OfflineBookingModalProps {
   station: Station | null;
@@ -472,7 +473,38 @@ export default function OfflineBookingModal({ station, isOpen, onClose, stationB
         });
       }
 
+      // Automatically create or update the Offline User profile
+      if (phone.trim().length === 10) {
+        const offlineUserId = `offline_${phone.trim()}`;
+        const userRef = doc(db, "users", offlineUserId);
+        batch.set(userRef, {
+          id: offlineUserId,
+          name: guestName.trim() || "Walk-in Guest",
+          phone: phone.trim(),
+          isOffline: true,
+          totalHoursPlayed: increment(selectedDuration / 60),
+          totalSpent: increment(Number(finalTotalCost.toFixed(2))),
+        }, { merge: true });
+      }
+
       await batch.commit();
+
+      // Trigger WhatsApp message if a phone number exists
+      if (phone.trim().length === 10) {
+        try {
+          // Fire and forget (don't block the UI)
+          sendWhatsAppMessage({
+            to: `91${phone.trim()}`, // Assuming India country code, you can adjust this if needed
+            templateName: "booking_confirmation", // Ensure you create this template in Meta Console
+            parameters: [guestName.trim() || "Guest", station.name, String(selectedDuration)]
+          }).catch(err => console.log("WhatsApp skipped/failed:", err.message));
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      setGuestName("");
+      setPhone("");
       onClose();
     } catch (err) {
       console.error("Failed to assign walk-in:", err);

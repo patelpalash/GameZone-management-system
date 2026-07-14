@@ -46,6 +46,9 @@ export interface User {
   phone: string;
   dob?: string;
   totalHoursPlayed: number;
+  totalSpent?: number;
+  isOffline?: boolean;
+  joinedAt?: number;
 }
 
 export interface TournamentRegistration {

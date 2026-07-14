@@ -84,10 +84,9 @@ export default function UserDetailsModal({ user, onClose }: UserDetailsModalProp
 
   useEffect(() => {
     setLoading(true);
-    const q = query(
-      collection(db, "bookings"),
-      where("userId", "==", user.id)
-    );
+    const q = user.isOffline 
+      ? query(collection(db, "bookings"), where("userPhone", "==", user.phone))
+      : query(collection(db, "bookings"), where("userId", "==", user.id));
 
     const unsubscribe = onSnapshot(q, (snap) => {
       const data: Booking[] = [];

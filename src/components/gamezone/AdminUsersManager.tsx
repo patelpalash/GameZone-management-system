@@ -37,7 +37,7 @@ const getBadgeColor = (badge: string) => {
   }
 };
 
-type SortField = "name" | "totalHoursPlayed";
+type SortField = "name" | "totalHoursPlayed" | "totalSpent" | "joinedAt";
 type SortOrder = "asc" | "desc";
 
 export default function AdminUsersManager() {
@@ -47,6 +47,7 @@ export default function AdminUsersManager() {
   const [sortField, setSortField] = useState<SortField>("totalHoursPlayed");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [userTypeFilter, setUserTypeFilter] = useState<"all" | "registered" | "walkin">("all");
 
   // KPIs
   const totalUsers = users.length;
@@ -63,12 +64,16 @@ export default function AdminUsersManager() {
         const fetchedUsers: User[] = [];
         querySnapshot.forEach((doc) => {
           const data = doc.data();
+          const createdAtMs = data.createdAt ? (typeof data.createdAt.toMillis === 'function' ? data.createdAt.toMillis() : new Date(data.createdAt as unknown as string).getTime()) : 0;
           fetchedUsers.push({
             id: doc.id,
             name: data.name || "Unknown User",
             email: data.email || "",
             phone: data.phone || "",
-            totalHoursPlayed: data.totalHoursPlayed || 0,
+            totalHoursPlayed: Number((data.totalHoursPlayed || 0).toFixed(2)),
+            totalSpent: data.totalSpent || 0,
+            isOffline: data.isOffline || false,
+            joinedAt: createdAtMs,
           });
         });
         
@@ -88,7 +93,7 @@ export default function AdminUsersManager() {
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
     } else {
       setSortField(field);
-      setSortOrder(field === "totalHoursPlayed" ? "desc" : "asc"); // Default sensible orders
+      setSortOrder(field === "name" ? "asc" : "desc"); // Default sensible orders
     }
   };
 
@@ -105,12 +110,22 @@ export default function AdminUsersManager() {
       );
     }
 
+    if (userTypeFilter === "registered") {
+      result = result.filter(u => !u.isOffline);
+    } else if (userTypeFilter === "walkin") {
+      result = result.filter(u => u.isOffline);
+    }
+
     result.sort((a, b) => {
       let comparison = 0;
       if (sortField === "name") {
         comparison = a.name.localeCompare(b.name);
       } else if (sortField === "totalHoursPlayed") {
         comparison = a.totalHoursPlayed - b.totalHoursPlayed;
+      } else if (sortField === "totalSpent") {
+        comparison = (a.totalSpent || 0) - (b.totalSpent || 0);
+      } else if (sortField === "joinedAt") {
+        comparison = (a.joinedAt || 0) - (b.joinedAt || 0);
       }
 
       return sortOrder === "asc" ? comparison : -comparison;
@@ -157,6 +172,21 @@ export default function AdminUsersManager() {
             className="w-full bg-slate-950 border border-slate-800 text-white pl-10 pr-4 py-2 font-mono text-sm focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-all placeholder:text-slate-600"
           />
         </div>
+        
+        <div className="flex w-full md:w-auto bg-slate-950 border border-slate-800 rounded-md overflow-x-auto whitespace-nowrap">
+          <button 
+            onClick={() => setUserTypeFilter("all")}
+            className={`px-3 py-2 text-xs font-mono font-bold transition-colors ${userTypeFilter === 'all' ? 'bg-cyan-500 text-black' : 'text-slate-400 hover:bg-slate-900 hover:text-white'}`}
+          >ALL</button>
+          <button 
+            onClick={() => setUserTypeFilter("registered")}
+            className={`px-3 py-2 text-xs font-mono font-bold transition-colors ${userTypeFilter === 'registered' ? 'bg-cyan-500 text-black' : 'text-slate-400 hover:bg-slate-900 hover:text-white'}`}
+          >REGISTERED</button>
+          <button 
+            onClick={() => setUserTypeFilter("walkin")}
+            className={`px-3 py-2 text-xs font-mono font-bold transition-colors ${userTypeFilter === 'walkin' ? 'bg-cyan-500 text-black' : 'text-slate-400 hover:bg-slate-900 hover:text-white'}`}
+          >WALK-IN</button>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -185,7 +215,7 @@ export default function AdminUsersManager() {
 
         <div className="bg-slate-900 border border-slate-800 p-4 border-l-4 border-l-pink-500 relative overflow-hidden group">
           <div className="absolute right-0 top-0 opacity-5 group-hover:opacity-10 transition-opacity">
-            <Crown className="w-24 h-24 -mt-4 -mr-4 text-pink-500" />
+            <Award className="w-24 h-24 -mt-4 -mr-4 text-pink-500" />
           </div>
           <p className="text-slate-400 font-mono text-xs uppercase tracking-widest mb-1">Elite Players</p>
           <div className="flex items-end gap-3">
@@ -193,6 +223,16 @@ export default function AdminUsersManager() {
             <span className="text-pink-500 font-bold mb-1 tracking-widest">VIPS</span>
           </div>
         </div>
+      </div>
+
+      {/* League Guide Legend */}
+      <div className="flex flex-wrap items-center gap-2 bg-slate-900/50 border border-slate-800 p-3 rounded-md text-xs font-mono">
+        <span className="text-slate-400 font-bold mr-2"><Award className="w-4 h-4 inline-block mr-1"/> RANKS GUIDE:</span>
+        <span className="px-2 py-1 text-slate-500 border border-slate-700 bg-slate-800 rounded">SILVER (0-5h)</span>
+        <span className="px-2 py-1 text-amber-500 border border-amber-500/50 bg-amber-500/10 rounded">GOLD (5-20h)</span>
+        <span className="px-2 py-1 text-slate-300 border border-slate-400/50 bg-slate-400/10 rounded">PLATINUM (20-50h)</span>
+        <span className="px-2 py-1 text-cyan-400 border border-cyan-400/50 bg-cyan-400/10 rounded">DIAMOND (50-100h)</span>
+        <span className="px-2 py-1 text-yellow-400 border border-yellow-400/50 bg-yellow-400/10 rounded">LEGENDARY (100h+)</span>
       </div>
 
       {/* Data Grid */}
@@ -217,10 +257,26 @@ export default function AdminUsersManager() {
                 </th>
                 <th 
                   className="p-4 cursor-pointer hover:bg-slate-800/50 transition-colors group select-none"
+                  onClick={() => handleSort("joinedAt")}
+                >
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 flex-shrink-0" /> JOIN DATE <SortIcon field="joinedAt" />
+                  </div>
+                </th>
+                <th 
+                  className="p-4 cursor-pointer hover:bg-slate-800/50 transition-colors group select-none"
                   onClick={() => handleSort("totalHoursPlayed")}
                 >
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4 flex-shrink-0" /> PLAYTIME <SortIcon field="totalHoursPlayed" />
+                  </div>
+                </th>
+                <th 
+                  className="p-4 cursor-pointer hover:bg-slate-800/50 transition-colors group select-none"
+                  onClick={() => handleSort("totalSpent")}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold">₹</span> SPENDING <SortIcon field="totalSpent" />
                   </div>
                 </th>
                 <th className="p-4">
@@ -236,6 +292,7 @@ export default function AdminUsersManager() {
                   const badge = getBadgeLabel(u.totalHoursPlayed);
                   const badgeClasses = getBadgeColor(badge);
                   const isTopPlayer = u.totalHoursPlayed >= 50; // Highlighting Diamond/Legendary players
+                  const isNewPlayer = u.joinedAt ? (Date.now() - u.joinedAt) <= (30 * 24 * 60 * 60 * 1000) : false;
 
                   return (
                     <tr 
@@ -252,7 +309,11 @@ export default function AdminUsersManager() {
                             {isTopPlayer ? <Crown className="w-4 h-4" /> : <UserIcon className="w-4 h-4" />}
                           </div>
                           <div className="flex flex-col">
-                            <span className="font-bold text-slate-200">{u.name}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-200">{u.name}</span>
+                              {u.isOffline && <span className="px-1.5 py-0.5 bg-slate-800 text-slate-400 text-[9px] uppercase tracking-widest font-black rounded border border-slate-700">Walk-In</span>}
+                              {isNewPlayer && <span className="px-1.5 py-0.5 bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 text-[9px] uppercase tracking-widest font-black rounded animate-pulse">NEW</span>}
+                            </div>
                             <span className="text-xs text-slate-600 truncate max-w-[150px]" title={u.id}>ID: {u.id.substring(0, 8)}...</span>
                           </div>
                         </div>
@@ -264,11 +325,21 @@ export default function AdminUsersManager() {
                         </div>
                       </td>
                       <td className="p-4">
+                        <span className="text-slate-400 text-sm">
+                          {u.joinedAt ? new Date(u.joinedAt).toLocaleDateString("en-IN", { day: '2-digit', month: 'short', year: 'numeric' }) : <span className="italic text-slate-600">N/A</span>}
+                        </span>
+                      </td>
+                      <td className="p-4">
                         <div className="flex items-center gap-2">
                           <span className={`font-black ${u.totalHoursPlayed > 0 ? 'text-white' : 'text-slate-600'}`}>
                             {u.totalHoursPlayed} <span className="text-xs font-normal text-slate-500">HRS</span>
                           </span>
                         </div>
+                      </td>
+                      <td className="p-4">
+                        <span className="font-mono font-bold text-emerald-400">
+                          ₹{u.totalSpent || 0}
+                        </span>
                       </td>
                       <td className="p-4">
                         <span className={`px-2 py-1 text-[10px] font-bold tracking-widest border rounded-sm flex items-center w-fit gap-1 ${badgeClasses}`}>

@@ -5,7 +5,7 @@ import { collection, query, where, onSnapshot, Timestamp, orderBy } from "fireba
 import { db } from "@/lib/firebase";
 import { Booking, Station } from "@/types";
 import { DollarSign, TrendingUp, MonitorPlay, Gamepad2, CreditCard, Banknote, Download, Store, TrendingDown } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { DoubleEntryLedger, LedgerTransaction } from "./finance/DoubleEntryLedger";
 import ExpenseManager from "./finance/ExpenseManager";
 import InventorySalesHistory from "./finance/InventorySalesHistory";
@@ -23,6 +23,8 @@ export default function AccountingDashboard({ initialTab = "ledger" }: { initial
     return d.toISOString().split('T')[0];
   });
   const [endDateStr, setEndDateStr] = useState("");
+  const [chartType, setChartType] = useState<"bar" | "line">("bar");
+  const [chartDays, setChartDays] = useState<number>(7);
 
   const quickSelectValue = useMemo(() => {
     if (!startDateStr && !endDateStr) return 'all';
@@ -68,16 +70,20 @@ export default function AccountingDashboard({ initialTab = "ledger" }: { initial
 
   // Fetch Finance Data
   useEffect(() => {
-    const start = startDateStr ? new Date(startDateStr + "T00:00:00") : new Date(0); // Epoch if none
-    const end = endDateStr ? new Date(endDateStr + "T00:00:00") : new Date(2100, 1, 1);
+    const dashboardStart = startDateStr ? new Date(startDateStr + "T00:00:00").getTime() : 0;
+    const dashboardEnd = endDateStr ? new Date(endDateStr + "T23:59:59.999").getTime() : new Date(2100, 1, 1).getTime();
     
-    // Include time up to the end of the day for endDate
-    end.setHours(23, 59, 59, 999);
+    const chartStart = new Date();
+    chartStart.setDate(chartStart.getDate() - chartDays);
+    chartStart.setHours(0,0,0,0);
+    
+    const fetchStart = new Date(Math.min(dashboardStart, chartStart.getTime()));
+    const fetchEnd = new Date(Math.max(dashboardEnd, Date.now()));
 
     const qExp = query(
       collection(db, "expenses"),
-      where("createdAt", ">=", Timestamp.fromDate(start)),
-      where("createdAt", "<=", Timestamp.fromDate(end)),
+      where("createdAt", ">=", Timestamp.fromDate(fetchStart)),
+      where("createdAt", "<=", Timestamp.fromDate(fetchEnd)),
       orderBy("createdAt", "desc")
     );
     const unsubExp = onSnapshot(qExp, (snap) => {
@@ -88,8 +94,8 @@ export default function AccountingDashboard({ initialTab = "ledger" }: { initial
 
     const qInv = query(
       collection(db, "inventory_sales"),
-      where("createdAt", ">=", Timestamp.fromDate(start)),
-      where("createdAt", "<=", Timestamp.fromDate(end)),
+      where("createdAt", ">=", Timestamp.fromDate(fetchStart)),
+      where("createdAt", "<=", Timestamp.fromDate(fetchEnd)),
       orderBy("createdAt", "desc")
     );
     const unsubInv = onSnapshot(qInv, (snap) => {
@@ -133,12 +139,12 @@ export default function AccountingDashboard({ initialTab = "ledger" }: { initial
     });
   }, [bookings, startDateStr, endDateStr]);
 
-  // Aggregate Master Ledger
-  const ledgerTransactions: LedgerTransaction[] = useMemo(() => {
+  // Unified Transactions List (Unfiltered)
+  const allTransactions = useMemo(() => {
     const txList: LedgerTransaction[] = [];
     
     // 1. Add Bookings Revenue
-    filteredBookings.forEach(b => {
+    bookings.forEach(b => {
       const bDate = typeof b.endTime?.toDate === "function" ? b.endTime.toDate() : new Date(b.endTime as unknown as string);
       txList.push({
         id: b.id,
@@ -176,11 +182,19 @@ export default function AccountingDashboard({ initialTab = "ledger" }: { initial
       });
     });
 
-    return txList.sort((a, b) => b.timestamp - a.timestamp); // Sort by newest first
-  }, [filteredBookings, inventorySales, expenses, stations]);
+    return txList.sort((a, b) => b.timestamp - a.timestamp);
+  }, [bookings, inventorySales, expenses, stations]);
 
-  // Calculate Metrics
+  const ledgerTransactions = useMemo(() => {
+    const dashboardStart = startDateStr ? new Date(startDateStr + "T00:00:00").getTime() : 0;
+    const dashboardEnd = endDateStr ? new Date(endDateStr + "T23:59:59.999").getTime() : new Date(2100, 1, 1).getTime();
+    return allTransactions.filter(tx => tx.timestamp >= dashboardStart && tx.timestamp <= dashboardEnd);
+  }, [allTransactions, startDateStr, endDateStr]);
+
   const { totalRev, totalExp, pcRev, consoleRev, cashRev, upiRev, invRev } = useMemo(() => {
+    const dashboardStart = startDateStr ? new Date(startDateStr + "T00:00:00").getTime() : 0;
+    const dashboardEnd = endDateStr ? new Date(endDateStr + "T23:59:59.999").getTime() : new Date(2100, 1, 1).getTime();
+
     let tr = 0, te = 0, pr = 0, cr = 0, cash = 0, upi = 0, inv = 0;
 
     filteredBookings.forEach(b => {
@@ -205,6 +219,8 @@ export default function AccountingDashboard({ initialTab = "ledger" }: { initial
     });
 
     inventorySales.forEach(s => {
+      const t = s.createdAt.toDate().getTime();
+      if (t < dashboardStart || t > dashboardEnd) return;
       tr += s.totalRevenue;
       inv += s.totalRevenue;
       if (s.paymentMethod === "Split") {
@@ -218,19 +234,28 @@ export default function AccountingDashboard({ initialTab = "ledger" }: { initial
     });
 
     expenses.forEach(e => {
+      const t = e.createdAt.toDate().getTime();
+      if (t < dashboardStart || t > dashboardEnd) return;
       te += e.amount;
     });
 
     return { totalRev: tr, totalExp: te, pcRev: pr, consoleRev: cr, cashRev: cash, upiRev: upi, invRev: inv };
-  }, [filteredBookings, inventorySales, expenses, stations]);
+  }, [filteredBookings, inventorySales, expenses, stations, startDateStr, endDateStr]);
 
   const netProfit = totalRev - totalExp;
 
-  // Chart Data (Dynamic Dates)
+  // Chart Data (Dynamic Dates independent of ledger)
   const chartData = useMemo(() => {
     const dataMap: Record<string, { name: string, revenue: number, expenses: number, timestamp: number }> = {};
     
-    ledgerTransactions.forEach(tx => {
+    const chartStart = new Date();
+    chartStart.setDate(chartStart.getDate() - chartDays);
+    chartStart.setHours(0,0,0,0);
+    const chartStartMs = chartStart.getTime();
+
+    allTransactions.forEach(tx => {
+      if (tx.timestamp < chartStartMs) return;
+
       const d = new Date(tx.timestamp);
       const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       
@@ -243,7 +268,7 @@ export default function AccountingDashboard({ initialTab = "ledger" }: { initial
     });
 
     return Object.values(dataMap).sort((a, b) => a.timestamp - b.timestamp);
-  }, [ledgerTransactions]);
+  }, [allTransactions, chartDays]);
 
   // Revenue breakdown for PieChart
   const pieData = useMemo(() => {
@@ -448,17 +473,52 @@ export default function AccountingDashboard({ initialTab = "ledger" }: { initial
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             {/* Chart Section */}
             <div className="xl:col-span-2 p-6 border-2 border-slate-800 bg-slate-900/50 cyber-cut-reverse">
-              <h3 className="text-sm font-bold tracking-widest text-slate-400 uppercase mb-6">Revenue vs Expenses</h3>
+              <div className="flex justify-between items-center mb-6">
+                <div className="flex flex-col">
+                  <h3 className="text-sm font-bold tracking-widest text-slate-400 uppercase">Revenue vs Expenses</h3>
+                  <select 
+                    value={chartDays} 
+                    onChange={(e) => setChartDays(Number(e.target.value))}
+                    className="mt-1 bg-slate-950 border border-slate-800 text-cyan-500 font-mono text-xs px-2 py-1 rounded outline-none"
+                  >
+                    <option value={7}>Last 7 Days</option>
+                    <option value={15}>Last 15 Days</option>
+                    <option value={30}>Last 30 Days</option>
+                    <option value={90}>Last 90 Days</option>
+                  </select>
+                </div>
+                <div className="flex bg-slate-950 border border-slate-800 rounded overflow-hidden">
+                  <button 
+                    onClick={() => setChartType("bar")}
+                    className={`px-3 py-1 text-xs font-mono font-bold transition-colors ${chartType === 'bar' ? 'bg-cyan-500 text-black' : 'text-slate-400 hover:bg-slate-900 hover:text-white'}`}
+                  >BAR</button>
+                  <button 
+                    onClick={() => setChartType("line")}
+                    className={`px-3 py-1 text-xs font-mono font-bold transition-colors ${chartType === 'line' ? 'bg-cyan-500 text-black' : 'text-slate-400 hover:bg-slate-900 hover:text-white'}`}
+                  >LINE</button>
+                </div>
+              </div>
               <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                    <XAxis dataKey="name" stroke="#64748b" tick={{ fill: '#94a3b8', fontSize: 12 }} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#64748b" tick={{ fill: '#94a3b8', fontSize: 12 }} tickLine={false} axisLine={false} tickFormatter={(val) => `₹${val}`} />
-                    <RechartsTooltip contentStyle={{ backgroundColor: '#020617', borderColor: '#1e293b', color: '#fff', fontFamily: 'monospace' }} />
-                    <Line type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={3} dot={{ fill: '#10b981', r: 4 }} activeDot={{ r: 6 }} name="Revenue" />
-                    <Line type="monotone" dataKey="expenses" stroke="#ec4899" strokeWidth={3} dot={{ fill: '#ec4899', r: 4 }} activeDot={{ r: 6 }} name="Expenses" />
-                  </LineChart>
+                  {chartType === "line" ? (
+                    <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                      <XAxis dataKey="name" stroke="#64748b" tick={{ fill: '#94a3b8', fontSize: 12 }} tickLine={false} axisLine={false} />
+                      <YAxis stroke="#64748b" tick={{ fill: '#94a3b8', fontSize: 12 }} tickLine={false} axisLine={false} tickFormatter={(val) => `₹${val}`} />
+                      <RechartsTooltip contentStyle={{ backgroundColor: '#020617', borderColor: '#1e293b', color: '#fff', fontFamily: 'monospace' }} cursor={{fill: '#1e293b'}} />
+                      <Line type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={3} dot={{ fill: '#10b981', r: 4 }} activeDot={{ r: 6 }} name="Revenue" />
+                      <Line type="monotone" dataKey="expenses" stroke="#ec4899" strokeWidth={3} dot={{ fill: '#ec4899', r: 4 }} activeDot={{ r: 6 }} name="Expenses" />
+                    </LineChart>
+                  ) : (
+                    <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                      <XAxis dataKey="name" stroke="#64748b" tick={{ fill: '#94a3b8', fontSize: 12 }} tickLine={false} axisLine={false} />
+                      <YAxis stroke="#64748b" tick={{ fill: '#94a3b8', fontSize: 12 }} tickLine={false} axisLine={false} tickFormatter={(val) => `₹${val}`} />
+                      <RechartsTooltip contentStyle={{ backgroundColor: '#020617', borderColor: '#1e293b', color: '#fff', fontFamily: 'monospace' }} cursor={{fill: '#1e293b'}} />
+                      <Bar dataKey="revenue" stackId="a" fill="#10b981" name="Revenue" maxBarSize={50} />
+                      <Bar dataKey="expenses" stackId="a" fill="#ec4899" radius={[4, 4, 0, 0]} name="Expenses" maxBarSize={50} />
+                    </BarChart>
+                  )}
                 </ResponsiveContainer>
               </div>
             </div>
