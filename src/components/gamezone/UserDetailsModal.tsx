@@ -107,7 +107,7 @@ export default function UserDetailsModal({ user, onClose }: UserDetailsModalProp
     });
 
     return () => unsubscribe();
-  }, [user.id]);
+  }, [user.id, user.isOffline, user.phone]);
 
   const badge = getBadgeLabel(user.totalHoursPlayed);
   const badgeClasses = getBadgeColor(badge);

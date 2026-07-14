@@ -108,7 +108,7 @@ export default function AccountingDashboard({ initialTab = "ledger" }: { initial
       unsubExp();
       unsubInv();
     };
-  }, [startDateStr, endDateStr]);
+  }, [startDateStr, endDateStr, chartDays]);
 
   const filteredBookings = useMemo(() => {
     return bookings.filter(b => {

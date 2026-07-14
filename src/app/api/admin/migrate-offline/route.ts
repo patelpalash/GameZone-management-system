@@ -45,7 +45,7 @@ export async function GET() {
     const batch = adminDb.batch();
     let count = 0;
 
-    for (const [phone, data] of offlineUsersMap.entries()) {
+    for (const [phone, data] of Array.from(offlineUsersMap.entries())) {
       const offlineUserId = `offline_${phone}`;
       const userRef = adminDb.collection("users").doc(offlineUserId);
       

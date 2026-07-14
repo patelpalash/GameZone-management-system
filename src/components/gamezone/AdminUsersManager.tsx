@@ -132,7 +132,7 @@ export default function AdminUsersManager() {
     });
 
     return result;
-  }, [users, searchQuery, sortField, sortOrder]);
+  }, [users, searchQuery, sortField, sortOrder, userTypeFilter]);
 
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) return <span className="w-4 h-4 opacity-0 group-hover:opacity-30 flex-shrink-0"><ChevronDown className="w-4 h-4" /></span>;
