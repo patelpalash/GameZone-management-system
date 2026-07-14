@@ -198,15 +198,16 @@ export default function AccountingDashboard({ initialTab = "ledger" }: { initial
     let tr = 0, te = 0, pr = 0, cr = 0, cash = 0, upi = 0, inv = 0;
 
     filteredBookings.forEach(b => {
-      const isRefunded = b.status === "refunded";
+      if (b.status === "refunded") return; // Net zero impact on KPIs
+
       tr += b.totalCost;
       const st = stations.find(s => s.id === b.stationId);
       if (st?.type === 'PC') pr += b.totalCost;
       else if (st?.type === 'PS5' || st?.type === 'Xbox') cr += b.totalCost;
 
-      const amt = isRefunded ? -b.totalCost : b.totalCost;
-      const cashAmt = isRefunded ? -(b.splitCash || 0) : (b.splitCash || 0);
-      const onlineAmt = isRefunded ? -(b.splitOnline || 0) : (b.splitOnline || 0);
+      const amt = b.totalCost;
+      const cashAmt = b.splitCash || 0;
+      const onlineAmt = b.splitOnline || 0;
 
       if (b.paymentMethod === "Cash") {
         cash += amt;
