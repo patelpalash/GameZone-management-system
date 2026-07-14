@@ -185,6 +185,24 @@ export default function AccountingDashboard({ initialTab = "ledger" }: { initial
     return txList.sort((a, b) => b.timestamp - a.timestamp);
   }, [bookings, inventorySales, expenses, stations]);
 
+  const filteredExpenses = useMemo(() => {
+    const dashboardStart = startDateStr ? new Date(startDateStr + "T00:00:00").getTime() : 0;
+    const dashboardEnd = endDateStr ? new Date(endDateStr + "T23:59:59.999").getTime() : new Date(2100, 1, 1).getTime();
+    return expenses.filter(e => {
+      const t = e.createdAt.toDate().getTime();
+      return t >= dashboardStart && t <= dashboardEnd;
+    });
+  }, [expenses, startDateStr, endDateStr]);
+
+  const filteredInventorySales = useMemo(() => {
+    const dashboardStart = startDateStr ? new Date(startDateStr + "T00:00:00").getTime() : 0;
+    const dashboardEnd = endDateStr ? new Date(endDateStr + "T23:59:59.999").getTime() : new Date(2100, 1, 1).getTime();
+    return inventorySales.filter(s => {
+      const t = s.createdAt.toDate().getTime();
+      return t >= dashboardStart && t <= dashboardEnd;
+    });
+  }, [inventorySales, startDateStr, endDateStr]);
+
   const ledgerTransactions = useMemo(() => {
     const dashboardStart = startDateStr ? new Date(startDateStr + "T00:00:00").getTime() : 0;
     const dashboardEnd = endDateStr ? new Date(endDateStr + "T23:59:59.999").getTime() : new Date(2100, 1, 1).getTime();
@@ -192,9 +210,6 @@ export default function AccountingDashboard({ initialTab = "ledger" }: { initial
   }, [allTransactions, startDateStr, endDateStr]);
 
   const { totalRev, totalExp, pcRev, consoleRev, cashRev, upiRev, invRev } = useMemo(() => {
-    const dashboardStart = startDateStr ? new Date(startDateStr + "T00:00:00").getTime() : 0;
-    const dashboardEnd = endDateStr ? new Date(endDateStr + "T23:59:59.999").getTime() : new Date(2100, 1, 1).getTime();
-
     let tr = 0, te = 0, pr = 0, cr = 0, cash = 0, upi = 0, inv = 0;
 
     filteredBookings.forEach(b => {
@@ -219,9 +234,7 @@ export default function AccountingDashboard({ initialTab = "ledger" }: { initial
       }
     });
 
-    inventorySales.forEach(s => {
-      const t = s.createdAt.toDate().getTime();
-      if (t < dashboardStart || t > dashboardEnd) return;
+    filteredInventorySales.forEach(s => {
       tr += s.totalRevenue;
       inv += s.totalRevenue;
       if (s.paymentMethod === "Split") {
@@ -234,14 +247,12 @@ export default function AccountingDashboard({ initialTab = "ledger" }: { initial
       }
     });
 
-    expenses.forEach(e => {
-      const t = e.createdAt.toDate().getTime();
-      if (t < dashboardStart || t > dashboardEnd) return;
+    filteredExpenses.forEach(e => {
       te += e.amount;
     });
 
     return { totalRev: tr, totalExp: te, pcRev: pr, consoleRev: cr, cashRev: cash, upiRev: upi, invRev: inv };
-  }, [filteredBookings, inventorySales, expenses, stations, startDateStr, endDateStr]);
+  }, [filteredBookings, filteredInventorySales, filteredExpenses, stations, startDateStr, endDateStr]);
 
   const netProfit = totalRev - totalExp;
 
@@ -425,8 +436,8 @@ export default function AccountingDashboard({ initialTab = "ledger" }: { initial
         )}
       </div>
 
-      {activeTab === "inventory_sales" && <InventorySalesHistory sales={inventorySales} />}
-      {activeTab === "expenses" && <ExpenseManager expenses={expenses} dateLabel={quickSelectValue === 'all' ? 'All Time' : quickSelectValue === '0' ? 'Today' : quickSelectValue === 'custom' ? 'Custom Range' : `Last ${quickSelectValue} Days`} />}
+      {activeTab === "inventory_sales" && <InventorySalesHistory sales={filteredInventorySales} />}
+      {activeTab === "expenses" && <ExpenseManager expenses={filteredExpenses} dateLabel={quickSelectValue === 'all' ? 'All Time' : quickSelectValue === '0' ? 'Today' : quickSelectValue === 'custom' ? 'Custom Range' : `Last ${quickSelectValue} Days`} />}
 
       {activeTab === "ledger" && (
         <div className="space-y-6 animate-fade-in">
