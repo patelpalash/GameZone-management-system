@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Plus, Loader2, Edit, Trash2, Save, X } from "lucide-react";
 import { Expense, logExpense, updateExpense, deleteExpense } from "@/lib/financeApi";
 
