@@ -45,6 +45,8 @@ const PAYMENT_CONFIG: Record<string, { label: string; color: string }> = {
   PhonePe_UPI: { label: "PHONEPE UPI", color: "text-purple-400" },
   UPI_MOCK:    { label: "SIMULATED",  color: "text-yellow-400" },
   Cash:        { label: "CASH",       color: "text-green-400" },
+  Online:      { label: "ONLINE",     color: "text-blue-400" },
+  Split:       { label: "SPLIT",      color: "text-orange-400" },
 };
 
 const formatDateTime = (ts: Timestamp | null | undefined) => {

@@ -6,7 +6,7 @@ import { Expense, logExpense, updateExpense, deleteExpense } from "@/lib/finance
 
 export default function ExpenseManager({ expenses, dateLabel = "Selected Period" }: { expenses: Expense[], dateLabel?: string }) {
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newExpense, setNewExpense] = useState({ amount: "", category: "Rent", note: "" });
+  const [newExpense, setNewExpense] = useState<{ amount: string, category: string, note: string, paidVia: "Cash" | "Online" | "Internal" }>({ amount: "", category: "Rent", note: "", paidVia: "Cash" });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -15,6 +15,7 @@ export default function ExpenseManager({ expenses, dateLabel = "Selected Period"
   const [editAmount, setEditAmount] = useState<string>("");
   const [editCategory, setEditCategory] = useState<string>("");
   const [editNote, setEditNote] = useState<string>("");
+  const [editPaidVia, setEditPaidVia] = useState<"Cash" | "Online" | "Internal">("Cash");
 
 
   const handleLogExpense = async (e: React.FormEvent) => {
@@ -28,10 +29,11 @@ export default function ExpenseManager({ expenses, dateLabel = "Selected Period"
         amount: Number(newExpense.amount),
         category: newExpense.category,
         note: newExpense.note || newExpense.category,
+        paidVia: newExpense.paidVia,
         createdBy: "admin"
       });
       setShowAddForm(false);
-      setNewExpense({ amount: "", category: "Rent", note: "" });
+      setNewExpense({ amount: "", category: "Rent", note: "", paidVia: "Cash" });
     } catch (err) {
       console.error("Error logging expense:", err);
       setError((err as Error).message || "Failed to log expense.");
@@ -45,6 +47,7 @@ export default function ExpenseManager({ expenses, dateLabel = "Selected Period"
     setEditAmount(exp.amount.toString());
     setEditCategory(exp.category);
     setEditNote(exp.note);
+    setEditPaidVia(exp.paidVia || "Cash");
   };
 
   const saveEdit = async (id: string) => {
@@ -53,7 +56,8 @@ export default function ExpenseManager({ expenses, dateLabel = "Selected Period"
       await updateExpense(id, {
         amount: Number(editAmount),
         category: editCategory,
-        note: editNote || editCategory
+        note: editNote || editCategory,
+        paidVia: editPaidVia
       });
       setEditingId(null);
     } catch (err) {
@@ -119,6 +123,7 @@ export default function ExpenseManager({ expenses, dateLabel = "Selected Period"
               <option value="Hardware">Hardware / Repairs</option>
               <option value="Game Licenses">Game Licenses</option>
               <option value="Staff Wages">Staff Wages</option>
+              <option value="Self Use">Self Use (Inventory)</option>
               <option value="Misc">Miscellaneous</option>
             </select>
           </div>
@@ -132,6 +137,19 @@ export default function ExpenseManager({ expenses, dateLabel = "Selected Period"
               placeholder="E.g., Monthly electricity bill"
               className="w-full bg-black border border-slate-700 text-white p-2 text-xs focus:border-pink-500 outline-none disabled:opacity-50" 
             />
+          </div>
+          <div>
+            <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Paid Via</label>
+            <select 
+              value={newExpense.paidVia}
+              disabled={submitting}
+              onChange={(e) => setNewExpense({...newExpense, paidVia: e.target.value as "Cash" | "Online" | "Internal"})}
+              className="w-full bg-black border border-slate-700 text-white p-2 text-xs focus:border-pink-500 outline-none disabled:opacity-50"
+            >
+              <option value="Cash">Cash (from Register)</option>
+              <option value="Online">Online / Bank</option>
+              <option value="Internal">Internal (No Cash Move)</option>
+            </select>
           </div>
           <div className="md:col-span-4 flex justify-end">
             <button 
@@ -167,6 +185,7 @@ export default function ExpenseManager({ expenses, dateLabel = "Selected Period"
                 <th className="p-3">Date</th>
                 <th className="p-3">Category</th>
                 <th className="p-3">Note / Description</th>
+                <th className="p-3">Paid Via</th>
                 <th className="p-3 text-right">Amount</th>
                 <th className="p-3 text-center">Actions</th>
               </tr>
@@ -193,6 +212,7 @@ export default function ExpenseManager({ expenses, dateLabel = "Selected Period"
                           <option value="Hardware">Hardware / Repairs</option>
                           <option value="Game Licenses">Game Licenses</option>
                           <option value="Staff Wages">Staff Wages</option>
+                          <option value="Self Use">Self Use (Inventory)</option>
                           <option value="Misc">Miscellaneous</option>
                         </select>
                       ) : (
@@ -211,6 +231,23 @@ export default function ExpenseManager({ expenses, dateLabel = "Selected Period"
                         />
                       ) : (
                         exp.note
+                      )}
+                    </td>
+                    <td className="p-3 text-white">
+                      {isEditing ? (
+                        <select 
+                          value={editPaidVia} 
+                          onChange={e => setEditPaidVia(e.target.value as "Cash" | "Online" | "Internal")}
+                          className="bg-black border border-pink-500/50 text-white p-1 text-xs w-full focus:outline-none"
+                        >
+                          <option value="Cash">Cash</option>
+                          <option value="Online">Online</option>
+                          <option value="Internal">Internal</option>
+                        </select>
+                      ) : (
+                        <span className="px-1.5 py-0.5 border border-slate-700 text-slate-400 text-[10px] font-bold uppercase rounded bg-slate-900">
+                          {exp.paidVia || "Cash"}
+                        </span>
                       )}
                     </td>
                     <td className="p-3 text-right text-pink-400 font-bold">

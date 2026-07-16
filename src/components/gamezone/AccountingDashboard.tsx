@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { collection, query, where, onSnapshot, Timestamp, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Booking, Station } from "@/types";
-import { DollarSign, TrendingUp, MonitorPlay, Gamepad2, CreditCard, Banknote, Download, Store, TrendingDown } from "lucide-react";
+import { DollarSign, TrendingUp, MonitorPlay, Gamepad2, CreditCard, Banknote, Download, Store, TrendingDown, Wallet } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { DoubleEntryLedger, LedgerTransaction } from "./finance/DoubleEntryLedger";
 import ExpenseManager from "./finance/ExpenseManager";
@@ -209,8 +209,9 @@ export default function AccountingDashboard({ initialTab = "ledger" }: { initial
     return allTransactions.filter(tx => tx.timestamp >= dashboardStart && tx.timestamp <= dashboardEnd);
   }, [allTransactions, startDateStr, endDateStr]);
 
-  const { totalRev, totalExp, pcRev, consoleRev, cashRev, upiRev, invRev } = useMemo(() => {
+  const { totalRev, totalExp, pcRev, consoleRev, cashRev, upiRev, invRev, cashExp, internalExp } = useMemo(() => {
     let tr = 0, te = 0, pr = 0, cr = 0, cash = 0, upi = 0, inv = 0;
+    let ce = 0, ie = 0;
 
     filteredBookings.forEach(b => {
       if (b.status === "refunded") return; // Net zero impact on KPIs
@@ -249,12 +250,15 @@ export default function AccountingDashboard({ initialTab = "ledger" }: { initial
 
     filteredExpenses.forEach(e => {
       te += e.amount;
+      if (e.paidVia === "Internal") ie += e.amount;
+      else if (e.paidVia === "Cash" || !e.paidVia) ce += e.amount;
     });
 
-    return { totalRev: tr, totalExp: te, pcRev: pr, consoleRev: cr, cashRev: cash, upiRev: upi, invRev: inv };
+    return { totalRev: tr, totalExp: te, pcRev: pr, consoleRev: cr, cashRev: cash, upiRev: upi, invRev: inv, cashExp: ce, internalExp: ie };
   }, [filteredBookings, filteredInventorySales, filteredExpenses, stations, startDateStr, endDateStr]);
 
   const netProfit = totalRev - totalExp;
+  const cashOnHand = cashRev - cashExp;
 
   // Chart Data (Dynamic Dates independent of ledger)
   const chartData = useMemo(() => {
@@ -443,7 +447,7 @@ export default function AccountingDashboard({ initialTab = "ledger" }: { initial
         <div className="space-y-6 animate-fade-in">
 
           {/* Top Metrics Row */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <div className={`p-4 border-2 cyber-cut relative overflow-hidden group ${netProfit >= 0 ? 'border-emerald-500/50 bg-emerald-950/20' : 'border-red-500/50 bg-red-950/20'}`}>
               <div className="absolute top-0 right-0 p-2 opacity-10"><DollarSign className="w-24 h-24" /></div>
               <p className="text-xs font-bold tracking-widest uppercase opacity-70">Net_Profit</p>
@@ -468,6 +472,12 @@ export default function AccountingDashboard({ initialTab = "ledger" }: { initial
             <div className="p-4 border-2 border-pink-500/50 bg-pink-950/20 cyber-cut flex flex-col justify-center gap-2 relative">
               <p className="text-xs font-bold tracking-widest text-pink-500/70 uppercase flex items-center gap-1"><TrendingDown className="w-3 h-3"/> Total_Expenses</p>
               <h3 className="text-3xl font-black text-pink-500 mt-2 glow-pink">₹{totalExp.toLocaleString()}</h3>
+              {(totalExp > 0) && (
+                <div className="flex justify-between items-center text-[10px] font-mono text-pink-400/80 uppercase tracking-wider border-t border-pink-500/30 pt-1 mt-1">
+                  <span>Operating: ₹{(totalExp - internalExp).toLocaleString()}</span>
+                  <span>Internal: ₹{internalExp.toLocaleString()}</span>
+                </div>
+              )}
             </div>
             
             <div className="p-4 border-2 border-yellow-400/50 bg-yellow-400/5 cyber-cut flex flex-col justify-center gap-2">
@@ -476,9 +486,14 @@ export default function AccountingDashboard({ initialTab = "ledger" }: { initial
                 <span className="font-bold text-white">₹{upiRev.toLocaleString()}</span>
               </div>
               <div className="flex justify-between items-center text-sm font-mono text-yellow-400/80">
-                <span className="flex items-center gap-1"><Banknote className="w-3 h-3"/> CASH:</span>
+                <span className="flex items-center gap-1"><Banknote className="w-3 h-3"/> CASH REV:</span>
                 <span className="font-bold text-white">₹{cashRev.toLocaleString()}</span>
               </div>
+            </div>
+
+            <div className={`p-4 border-2 cyber-cut flex flex-col justify-center gap-2 relative ${cashOnHand >= 0 ? 'border-green-500/50 bg-green-950/20' : 'border-red-500/50 bg-red-950/20'}`}>
+              <p className={`text-xs font-bold tracking-widest uppercase flex items-center gap-1 ${cashOnHand >= 0 ? 'text-green-500/70' : 'text-red-500/70'}`}><Wallet className="w-3 h-3"/> Cash_On_Hand</p>
+              <h3 className={`text-3xl font-black mt-2 ${cashOnHand >= 0 ? 'text-green-500 glow-green' : 'text-red-500 glow-red'}`}>₹{cashOnHand.toLocaleString()}</h3>
             </div>
           </div>
 

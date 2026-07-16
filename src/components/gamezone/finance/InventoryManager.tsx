@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Plus, Minus, PackagePlus, ShoppingCart, Loader2, History, Trash2 } from "lucide-react";
-import { InventoryItem, addInventoryItem, getInventoryItems, sellInventoryItem, updateInventoryItem, deleteInventoryItem } from "@/lib/financeApi";
+import { InventoryItem, addInventoryItem, getInventoryItems, sellInventoryItem, selfUseInventoryItem, updateInventoryItem, deleteInventoryItem } from "@/lib/financeApi";
 
 export default function InventoryManager({ onGoToHistory }: { onGoToHistory?: () => void }) {
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -91,6 +91,20 @@ export default function InventoryManager({ onGoToHistory }: { onGoToHistory?: ()
       fetchItems();
     } catch (err) {
       alert("Error selling item: " + (err as Error).message);
+    }
+  };
+
+  const handleSelfUse = async (item: InventoryItem) => {
+    const confirmSelf = window.confirm(
+      `🔄 Self Use: ${item.name}\n\nThis will:\n• Deduct 1 from stock\n• Log ₹${item.costPrice} as an expense (cost price)\n\nProceed?`
+    );
+    if (!confirmSelf) return;
+
+    try {
+      await selfUseInventoryItem(item, 1, "admin");
+      fetchItems();
+    } catch (err) {
+      alert("Error logging self use: " + (err as Error).message);
     }
   };
 
@@ -346,6 +360,14 @@ export default function InventoryManager({ onGoToHistory }: { onGoToHistory?: ()
                     title="Sell via Split Payment"
                   >
                     SPLIT
+                  </button>
+                  <button 
+                    onClick={() => handleSelfUse(item)}
+                    disabled={item.stockLevel <= 0 || isEditing}
+                    className="px-2 py-1.5 bg-orange-600 hover:bg-orange-500 text-white font-black uppercase text-[10px] tracking-widest cyber-cut disabled:opacity-50 flex items-center gap-1 transition-all"
+                    title="Self Use — logs as expense at cost price"
+                  >
+                    SELF
                   </button>
                 </div>
               </div>

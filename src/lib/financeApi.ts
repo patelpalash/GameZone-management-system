@@ -7,6 +7,7 @@ export interface Expense {
   amount: number;
   category: string;
   note: string;
+  paidVia?: "Cash" | "Online" | "Internal";
   createdAt: Timestamp;
   createdBy: string;
 }
@@ -104,6 +105,37 @@ export const sellInventoryItem = async (
     paymentMethod,
     splitCash: paymentMethod === "Split" ? (splitCash || 0) : null,
     splitOnline: paymentMethod === "Split" ? (splitOnline || 0) : null,
+    createdAt: Timestamp.now()
+  });
+
+  await batch.commit();
+};
+
+export const selfUseInventoryItem = async (
+  item: InventoryItem,
+  quantity: number,
+  usedBy: string = "admin"
+) => {
+  if (item.stockLevel < quantity) {
+    throw new Error("Not enough stock available");
+  }
+
+  const batch = writeBatch(db);
+
+  // 1. Deduct stock
+  const itemRef = doc(db, "inventory", item.id);
+  batch.update(itemRef, {
+    stockLevel: item.stockLevel - quantity
+  });
+
+  // 2. Log as expense (at cost price, not selling price)
+  const expenseRef = doc(collection(db, "expenses"));
+  batch.set(expenseRef, {
+    amount: item.costPrice * quantity,
+    category: "Self Use",
+    note: `Self use: ${quantity}x ${item.name}`,
+    paidVia: "Internal",
+    createdBy: usedBy,
     createdAt: Timestamp.now()
   });
 

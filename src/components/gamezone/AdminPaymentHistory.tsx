@@ -127,8 +127,12 @@ export default function AdminPaymentHistory() {
       if (statusFilter !== "all" && b.status !== statusFilter) return false;
       
       if (methodFilter !== "all") {
-        const method = b.paymentMethod || "UPI"; // Default to UPI for legacy
-        if (method !== methodFilter) return false;
+        const method = b.paymentMethod || "Online";
+        if (methodFilter === "Online") {
+          if (method !== "Online" && method !== "UPI" && method !== "PhonePe_UPI" && method !== "UPI_MOCK") return false;
+        } else {
+          if (method !== methodFilter) return false;
+        }
       }
 
       if (searchQuery) {
@@ -187,7 +191,8 @@ export default function AdminPaymentHistory() {
           >
             <option value="all">ALL_METHODS</option>
             <option value="Cash">CASH</option>
-            <option value="UPI">UPI</option>
+            <option value="Online">ONLINE / UPI</option>
+            <option value="Split">SPLIT</option>
           </select>
 
           <select 
