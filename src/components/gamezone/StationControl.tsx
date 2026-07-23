@@ -174,7 +174,7 @@ export default function StationControl() {
       const now = new Date();
       activeBookingsRef.current.forEach(async (booking) => {
         if (booking.endTime) {
-          const endTimeDate = booking.endTime.toDate();
+          const endTimeDate = (typeof booking.endTime.toDate === 'function' ? booking.endTime.toDate() : new Date(booking.endTime as unknown as string));
           if (endTimeDate <= now) {
             console.log(`Auto-expiring session ${booking.id} for station ${booking.stationId}`);
             try {
@@ -186,7 +186,7 @@ export default function StationControl() {
                 if (!freshSnap.exists() || freshSnap.data()?.status !== "active") return false;
 
                 const stationSnap = await transaction.get(stationRef);
-                if (stationSnap.exists() && stationSnap.data()?.currentSessionId === booking.id) {
+                if (stationSnap.exists()) {
                   transaction.update(stationRef, {
                     status: "available",
                     currentSessionId: null,
@@ -222,13 +222,45 @@ export default function StationControl() {
     return () => clearInterval(interval);
   }, []);
 
+  // Self-Healing Reconciliation Hook: Auto-reset stations marked "occupied" without an unexpired active booking
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date();
+      stations.forEach(async (st) => {
+        if (st.status === "occupied") {
+          const hasValidActiveBooking = activeBookings.some(b => {
+            if (b.stationId !== st.id) return false;
+            if (b.status !== "active") return false;
+            if (!b.endTime) return true;
+            const endMs = (typeof b.endTime.toDate === 'function' ? b.endTime.toDate() : new Date(b.endTime as unknown as string)).getTime();
+            return endMs > now.getTime();
+          });
+
+          if (!hasValidActiveBooking) {
+            console.warn(`[Self-Healing] Station ${st.name} (${st.id}) marked occupied without active booking. Resetting to available.`);
+            try {
+              await updateDoc(doc(db, "stations", st.id), {
+                status: "available",
+                currentSessionId: null
+              });
+            } catch (err) {
+              console.error("Error auto-healing station status:", err);
+            }
+          }
+        }
+      });
+    }, 8000);
+
+    return () => clearInterval(interval);
+  }, [stations, activeBookings]);
+
   // Client-side auto-activation of confirmed pre-booked sessions
   useEffect(() => {
     const interval = setInterval(() => {
       const now = new Date();
       confirmedBookingsRef.current.forEach(async (booking) => {
         if (booking.scheduledStartTime && booking.scheduledEndTime) {
-          const startTimeDate = booking.scheduledStartTime.toDate();
+          const startTimeDate = (typeof booking.scheduledStartTime.toDate === 'function' ? booking.scheduledStartTime.toDate() : new Date(booking.scheduledStartTime as unknown as string));
           if (startTimeDate <= now) {
             console.log(`Auto-activating pre-booked session ${booking.id} for station ${booking.stationId}`);
             try {
@@ -299,30 +331,37 @@ export default function StationControl() {
   };
 
   const handleEndSession = async (station: Station) => {
-    if (!station.currentSessionId) {
-      alert("Error: No active session ID found on this node.");
-      return;
-    }
-
     try {
       const batch = writeBatch(db);
       
       const stationRef = doc(db, "stations", station.id);
-      const bookingRef = doc(db, "bookings", station.currentSessionId);
-
-      const bookingSnap = await getDoc(bookingRef);
 
       batch.update(stationRef, {
         status: "available",
         currentSessionId: null,
       });
 
-      if (bookingSnap.exists()) {
-        batch.update(bookingRef, {
-          status: "completed",
-          endTime: Timestamp.now(), // Force timer to stop
-        });
+      if (station.currentSessionId) {
+        const bookingRef = doc(db, "bookings", station.currentSessionId);
+        const bookingSnap = await getDoc(bookingRef);
+
+        if (bookingSnap.exists()) {
+          batch.update(bookingRef, {
+            status: "completed",
+            endTime: Timestamp.now(),
+          });
+        }
       }
+
+      // Also ensure any active bookings assigned to this station are completed
+      activeBookings.forEach(b => {
+        if (b.stationId === station.id && b.status === "active") {
+          batch.update(doc(db, "bookings", b.id), {
+            status: "completed",
+            endTime: Timestamp.now(),
+          });
+        }
+      });
 
       await batch.commit();
     } catch (error) {

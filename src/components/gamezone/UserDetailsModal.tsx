@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { User, Booking } from "@/types";
+import { User, Booking, Station } from "@/types";
 import {
   X,
   User as UserIcon,
@@ -39,9 +39,9 @@ const getBadgeColor = (badge: string) => {
   switch (badge) {
     case "LEGENDARY": return "text-yellow-400 border-yellow-400/50 bg-yellow-400/10";
     case "DIAMOND": return "text-cyan-400 border-cyan-400/50 bg-cyan-400/10";
-    case "PLATINUM": return "text-slate-300 border-slate-400/50 bg-slate-400/10";
-    case "GOLD": return "text-amber-500 border-amber-500/50 bg-amber-500/10";
-    default: return "text-slate-500 border-slate-600 bg-slate-800";
+    case "PLATINUM": return "text-purple-400 border-purple-400/50 bg-purple-400/10";
+    case "GOLD": return "text-amber-400 border-amber-400/50 bg-amber-400/10";
+    default: return "text-slate-400 border-slate-400/50 bg-slate-400/10";
   }
 };
 
@@ -80,7 +80,19 @@ function formatDuration(minutes: number): string {
 
 export default function UserDetailsModal({ user, onClose }: UserDetailsModalProps) {
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [stations, setStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "stations"), (snapshot) => {
+      const list: Station[] = [];
+      snapshot.forEach(docSnap => list.push({ id: docSnap.id, ...docSnap.data() } as Station));
+      setStations(list);
+    });
+    return () => unsub();
+  }, []);
+
+  const stationMap = (id: string) => stations.find(s => s.id === id)?.name || id;
 
   useEffect(() => {
     setLoading(true);
@@ -247,7 +259,7 @@ export default function UserDetailsModal({ user, onClose }: UserDetailsModalProp
                             <td className="p-4">
                               <div className="flex items-center gap-2">
                                 <TerminalSquare className="w-4 h-4 text-slate-500" />
-                                <span className="font-bold text-slate-300">{b.stationId}</span>
+                                <span className="font-bold text-slate-300">{stationMap(b.stationId)}</span>
                               </div>
                             </td>
                             <td className="p-4">

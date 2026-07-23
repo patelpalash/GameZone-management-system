@@ -3,15 +3,28 @@
 import { useEffect, useState, useMemo } from "react";
 import { collection, query, onSnapshot, doc, Timestamp, writeBatch, getDoc, orderBy, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Booking } from "@/types";
+import { Booking, Station } from "@/types";
 import { CheckCircle2, Clock, XCircle, Search, Filter } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function VerificationQueue() {
   const [allBookings, setAllBookings] = useState<Booking[]>([]);
+  const [stations, setStations] = useState<Station[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterType, setFilterType] = useState("all");
+
+  useEffect(() => {
+    const unsubStations = onSnapshot(collection(db, "stations"), (snapshot) => {
+      const list: Station[] = [];
+      snapshot.forEach(docSnap => {
+        list.push({ id: docSnap.id, ...docSnap.data() } as Station);
+      });
+      setStations(list);
+    });
+
+    return () => unsubStations();
+  }, []);
 
   useEffect(() => {
     const startOfToday = new Date();
@@ -95,13 +108,22 @@ export default function VerificationQueue() {
     }
   };
 
+  const stationMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    stations.forEach(s => {
+      map[s.id] = s.name;
+    });
+    return map;
+  }, [stations]);
+
   const filteredBookings = useMemo(() => {
     return allBookings.filter(b => {
       if (searchQuery) {
         const qLower = searchQuery.toLowerCase();
         const matchName = b.userName?.toLowerCase().includes(qLower);
         const matchTxn = b.transactionId?.toLowerCase().includes(qLower);
-        if (!matchName && !matchTxn) return false;
+        const matchStation = stationMap[b.stationId]?.toLowerCase().includes(qLower);
+        if (!matchName && !matchTxn && !matchStation) return false;
       }
       
       if (filterStatus !== "all" && b.status !== filterStatus) return false;
@@ -111,7 +133,7 @@ export default function VerificationQueue() {
 
       return true;
     });
-  }, [allBookings, searchQuery, filterStatus, filterType]);
+  }, [allBookings, searchQuery, filterStatus, filterType, stationMap]);
 
   return (
     <div className="bg-black border-2 border-cyan-500/40 cyber-cut h-[450px] xl:h-full flex flex-col">
@@ -195,7 +217,7 @@ export default function VerificationQueue() {
                   <div className="space-y-1 min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2 mb-1">
                       <p className="font-bold text-white tracking-widest uppercase">
-                        NODE: <span className="text-cyan-400">{booking.stationId}</span>
+                        NODE: <span className="text-cyan-400">{stationMap[booking.stationId] || booking.stationId}</span>
                       </p>
                       <span className={`text-[9px] font-black tracking-widest px-1.5 py-0.5 uppercase ${
                         isOffline ? "bg-yellow-900/50 text-yellow-500 border border-yellow-500/30" : "bg-blue-900/50 text-blue-400 border border-blue-500/30"

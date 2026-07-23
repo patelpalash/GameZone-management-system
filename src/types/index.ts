@@ -69,5 +69,13 @@ export interface Tournament {
   registeredTeams: TournamentRegistration[];
   status: "upcoming" | "active" | "completed";
   prizePool: string;
+  entryFee?: number;
+  formatType?: "single_elimination" | "double_elimination" | "points_table";
+  mode?: "1v1" | "2v2" | "5v5" | "custom";
+  stationType?: "PC" | "PS5" | "Xbox";
+  stationRate?: number;
+  prizeFirst?: number;
+  prizeSecond?: number;
+  prizeThird?: number;
 }
 
